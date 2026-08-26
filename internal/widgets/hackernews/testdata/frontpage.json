@@ -1,0 +1,31 @@
+{
+  "hits": [
+    {
+      "objectID": "40000001",
+      "title": "Show HN: ctOS, a terminal control plane",
+      "url": "https://github.com/0xquark/ctos",
+      "points": 412,
+      "num_comments": 137,
+      "author": "quark",
+      "created_at": "2026-08-26T09:00:00.000Z"
+    },
+    {
+      "objectID": "40000002",
+      "title": "Ask HN: What is your terminal setup?",
+      "url": "",
+      "points": 88,
+      "num_comments": 210,
+      "author": "someone",
+      "created_at": "2026-08-26T07:30:00.000Z"
+    },
+    {
+      "objectID": "40000003",
+      "title": "",
+      "url": "https://example.com/untitled",
+      "points": 5,
+      "num_comments": 0,
+      "author": "ghost",
+      "created_at": "2026-08-26T06:00:00.000Z"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+# Binaries
+/ctos
+/dist/
+*.exe
+*.test
+*.out
+
+# Go
+vendor/
+go.work
+go.work.sum
+
+# Coverage
+coverage.txt
+coverage.html
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Local config & secrets
+*.local.yaml
+.env
+
+# Internal working notes
+docs/
