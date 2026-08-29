@@ -63,7 +63,7 @@ func key(s string) tea.KeyMsg {
 	panic("unhandled key " + s)
 }
 
-// --- kill safety -----------------------------------------------------------
+// --- kill safety ----------------------------------------------------------
 
 // Signalling is not undoable, so one keystroke must never be enough.
 func TestKillNeedsConfirmation(t *testing.T) {
@@ -182,7 +182,7 @@ func TestNoActionsWhenListIsEmpty(t *testing.T) {
 	}
 }
 
-//  selection 
+// --- selection ------------------------------------------------------------
 
 // The cursor follows the process, not the row index, so a refresh that
 // reorders the table does not silently move the selection.
@@ -593,7 +593,7 @@ func TestChangingSortJumpsToTheTop(t *testing.T) {
 	}
 }
 
-//  detail pane 
+// --- detail pane ----------------------------------------------------------
 
 func TestDetailPaneShowsAncestry(t *testing.T) {
 	p := newWidget(t, 80, 24)
@@ -794,7 +794,7 @@ func TestDetailCanBeTurnedOffInConfig(t *testing.T) {
 	}
 }
 
-//  helpers 
+// --- helpers --------------------------------------------------------------
 
 func selectPID(t *testing.T, p *Processes, pid int) {
 	t.Helper()
