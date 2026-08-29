@@ -147,6 +147,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.layoutMode {
 			return m, m.layoutKey(msg)
 		}
+		// A widget typing a filter query owns the whole keyboard; otherwise
+		// "q" would quit mid-word. ctrl+c still gets out.
+		if widget.Grabbing(m.focused()) {
+			if msg.String() == "ctrl+c" {
+				return m, tea.Quit
+			}
+			return m, m.updateFocused(msg)
+		}
 		if cmd, handled := m.globalKey(msg); handled {
 			return m, cmd
 		}

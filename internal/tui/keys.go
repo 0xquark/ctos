@@ -29,6 +29,17 @@ func footer(t theme.Theme, w widget.Widget, expanded bool) string {
 		return expandedHelp(t, w)
 	}
 
+	// A widget taking text input has swallowed the global keys, so offering
+	// them would be a lie.
+	if widget.Grabbing(w) {
+		entries := []helpEntry{{"↵", "apply"}, {"esc", "cancel"}}
+		parts := make([]string, len(entries))
+		for i, e := range entries {
+			parts[i] = t.AccentStyle().Render(e.key) + " " + t.DimStyle().Render(e.desc)
+		}
+		return " " + strings.Join(parts, t.FaintStyle().Render("  ·  "))
+	}
+
 	entries := []helpEntry{{"tab", "focus"}, {"↑↓", "move"}}
 	if w != nil {
 		if actions := w.Actions(); len(actions) > 0 {

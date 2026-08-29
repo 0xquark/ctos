@@ -94,12 +94,34 @@ type Base struct {
 	focused bool
 }
 
+// SetSize records the inner content area assigned by the layout.
 func (b *Base) SetSize(w, h int) { b.W, b.H = w, h }
-func (b *Base) Focus()           { b.focused = true }
-func (b *Base) Blur()            { b.focused = false }
+
+// Focus marks the widget as holding keyboard focus.
+func (b *Base) Focus() { b.focused = true }
+
+// Blur marks the widget as no longer holding keyboard focus.
+func (b *Base) Blur() { b.focused = false }
 
 // Focused reports whether the widget currently has focus.
 func (b *Base) Focused() bool { return b.focused }
 
 // Actions defaults to none, so a read-only widget need not implement it.
 func (b *Base) Actions() []Action { return nil }
+
+// KeyGrabber is an optional interface for widgets that sometimes need every
+// keystroke, such as while a filter query is being typed. When GrabsKeys
+// reports true the dashboard stops interpreting keys itself and forwards them
+// all to the focused widget, so that typing "q" types a q rather than quitting.
+//
+// Only ctrl+c survives, because a way out must always exist. Widgets that
+// grab keys must offer their own exit, conventionally esc.
+type KeyGrabber interface {
+	GrabsKeys() bool
+}
+
+// Grabbing reports whether w is a KeyGrabber currently demanding raw keys.
+func Grabbing(w Widget) bool {
+	g, ok := w.(KeyGrabber)
+	return ok && g.GrabsKeys()
+}

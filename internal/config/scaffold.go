@@ -60,9 +60,25 @@ widgets:
     limit: 20
     refresh: 5m
 
+  processes:
+    type: processes
+    # cpu, mem, pid or name. In ctOS press c/m/p/n to sort, again to reverse.
+    sort: cpu
+    refresh: 3s
+    # Set to "me" for your own processes only, or a username.
+    user: ""
+    # Drop processes using no CPU at all.
+    hide_idle: false
+    # Detail pane under the list: ancestry tree, or logs with "l".
+    detail: true
+    # Rows given to the detail pane; 0 splits the space in half.
+    detail_lines: 0
+    # How far back the log view looks.
+    log_window: 5m
+
 rows:
   - [clock, notes]
-  - [hackernews]
+  - [processes, hackernews]
 `
 
 // Scaffold writes a starter config.yaml and dashboards/home.yaml into dir.
@@ -76,7 +92,7 @@ func Scaffold(dir string) (written, skipped []string, err error) {
 		path    string
 		content string
 	}{
-		{ConfigFile(dir), defaultConfigYAML},
+		{SettingsFile(dir), defaultConfigYAML},
 		{filepath.Join(DashboardsDir(dir), "home.yaml"), defaultDashboardYAML},
 	}
 

@@ -68,6 +68,10 @@ Edit them and restart.
 
 The same key does the same thing in every widget.
 
+Widgets may add their own keys on top — the `processes` widget uses `c`/`m`/`p`/`n` to sort,
+`/` to filter and `d`/`l` for its detail pane. While a widget is taking text input, it owns the whole keyboard, so `q` types
+a `q` instead of quitting; `esc` gets you out.
+
 ### Rearranging the layout
 
 Press `ctrl+l` to pick up the focused widget and move it around:
@@ -180,12 +184,84 @@ browser.
 | `refresh` | global default | poll interval, minimum `1m` |
 | `title` | `hacker news` | frame label |
 
+### `processes`
+
+The local process table, htop-style, with a detail pane below it.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `sort` | `cpu` | initial order: `cpu`, `mem`, `pid` or `name` |
+| `refresh` | `3s` | poll interval, minimum `500ms` |
+| `user` | *(all users)* | only this user's processes; `me` means the current user |
+| `filter` | *(none)* | initial filter query |
+| `hide_idle` | `false` | drop processes using no CPU |
+| `detail` | `true` | show the detail pane under the list |
+| `detail_lines` | `0` | rows given to the detail pane; `0` splits the space in half |
+| `log_window` | `5m` | how far back the log view looks |
+| `title` | `processes` | frame label |
+
+Keys, while the widget is focused:
+
+| Key | Does |
+|---|---|
+| `c` `m` `p` `n` | sort by CPU, memory, PID or name — press again to reverse |
+| `s` | cycle through those four |
+| `/` | filter by command, user or PID |
+| `d` | show or hide the detail pane |
+| `l` | switch the detail pane between ancestry and logs |
+| `enter` | kill the selected process (asks first) |
+| `r` | refresh now |
+
+The active column is marked with an arrow showing which way the rows actually run, and columns
+drop as the pane narrows — least useful first — so CPU% and the command are always visible.
+
+**The detail pane** shows the selected process's full command, expanded state, memory and start
+time, then its place in the process tree: the chain of parents up to `init`/`launchd`, and its
+own children. Press `l` and the pane shows that process's recent log lines instead, from `log
+show` on macOS or `journalctl` on Linux. Logging is queried on demand rather than on the refresh
+tick, because macOS scans a binary store to answer and takes about a second. A process that
+writes to stdout under a service manager often has nothing there — the pane says so rather than
+looking broken.
+
+**Killing** takes two keystrokes: `enter` arms it and names what will be signalled, then `enter`
+sends `SIGTERM` or `k` sends `SIGKILL`. `esc` cancels. The armed process is remembered by PID, so
+a refresh that re-sorts the table between the two keystrokes cannot retarget the kill.
+
+Changing the sort jumps to the top of the new order, since that is the reason to change it. A
+plain refresh keeps the cursor on whatever process you had selected, even if it moved rows.
+
+**Platforms.** The widget reads the process table with the system `ps`, and is verified on macOS
+and on Linux with procps (Debian 13 / procps-ng 4.0.4). The BSDs should work; same `ps` flags;
+but are untested.
+
+| | Process table | Load average | Logs |
+|---|---|---|---|
+| macOS | yes | yes | `log show` |
+| Linux, procps | yes | `/proc/loadavg` | `journalctl`, when present |
+| Linux, BusyBox only | **no** — see below | yes | no |
+| Windows | no | no | no |
+
+Two caveats worth knowing:
+
+- **BusyBox `ps`** (Alpine's default) has no `%CPU` or `%MEM` columns, so there is no process
+  table to build. The widget says so and names the fix: `apk add procps`.
+- **`%CPU` on macOS** is an average over the process's lifetime rather than an instantaneous
+  sample, so a process that was busy an hour ago still reads high. That is what `ps` reports and
+  the widget does not try to correct it.
+
+On a system without systemd, `journalctl` is absent and the log view says so rather than
+failing. Everything else keeps working.
+
 ## Why not just use tmux?
 
 ctOS owns its widgets rather than tiling other people's TUIs, because a pane of `htop` is an
 opaque rectangle. ctOS can't know what's selected in it, attach actions to it, or combine its
-data with anything else. The payoff arrives in v0.2: one merged, sorted process table across
-every machine you watch, instead of four panes each running `ssh vm-N htop`.
+data with anything else.
+
+The `processes` widget is the first half of that argument: because ctOS parses the process table
+itself, the table can be filtered, sorted, sized to a quarter of the screen, and acted on with
+the same keys as every other widget. The second half arrives in v0.2 — one merged, sorted
+process table across every machine you watch, instead of four panes each running `ssh vm-N htop`.
 
 ## License
 
