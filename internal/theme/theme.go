@@ -52,10 +52,23 @@ func New(accent string) Theme {
 
 // Style helpers. Each returns a fresh style so callers may chain freely.
 
-func (t Theme) TextStyle() lipgloss.Style   { return lipgloss.NewStyle().Foreground(t.Text) }
-func (t Theme) DimStyle() lipgloss.Style    { return lipgloss.NewStyle().Foreground(t.Dim) }
-func (t Theme) FaintStyle() lipgloss.Style  { return lipgloss.NewStyle().Foreground(t.Faint) }
+// TextStyle colours primary body text.
+func (t Theme) TextStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(t.Text) }
+
+// DimStyle colours secondary text, such as metadata columns.
+func (t Theme) DimStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(t.Dim) }
+
+// FaintStyle colours the least important text, such as separators.
+func (t Theme) FaintStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(t.Faint) }
+
+// AccentStyle colours selections and other highlights.
 func (t Theme) AccentStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(t.Accent) }
-func (t Theme) GoodStyle() lipgloss.Style   { return lipgloss.NewStyle().Foreground(t.Good) }
-func (t Theme) WarnStyle() lipgloss.Style   { return lipgloss.NewStyle().Foreground(t.Warn) }
-func (t Theme) BadStyle() lipgloss.Style    { return lipgloss.NewStyle().Foreground(t.Bad) }
+
+// GoodStyle colours healthy or successful states.
+func (t Theme) GoodStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(t.Good) }
+
+// WarnStyle colours states that deserve attention but are not failures.
+func (t Theme) WarnStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(t.Warn) }
+
+// BadStyle colours errors and failed states.
+func (t Theme) BadStyle() lipgloss.Style { return lipgloss.NewStyle().Foreground(t.Bad) }

@@ -107,6 +107,7 @@ func New(ctx widget.Context) (widget.Widget, error) {
 	return &HackerNews{name: ctx.Name, cfg: cfg, theme: ctx.Theme, refresh: refresh}, nil
 }
 
+// Title is the label drawn in the widget frame.
 func (h *HackerNews) Title() string { return h.cfg.Title }
 
 // Init starts the first fetch.
@@ -242,7 +243,7 @@ func fetchStories(limit int) ([]story, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reach hacker news: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("hacker news returned %s", resp.Status)

@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# A new push to a branch cancels any run still in flight for that branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: test (${{ matrix.os }})
@@ -22,7 +27,8 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: stable
+          # Track the toolchain in go.mod so CI and local builds cannot drift.
+          go-version-file: go.mod
           cache: true
 
       - name: Verify formatting
@@ -44,13 +50,21 @@ jobs:
         run: go build ./...
 
   lint:
+    name: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
-          go-version: stable
-          cache: true
-      - uses: golangci/golangci-lint-action@v6
+          go-version-file: go.mod
+          # golangci-lint-action manages its own cache; letting setup-go cache
+          # too just fights it for the same keys.
+          cache: false
+
+      # v8 is the first action release that understands a `version: "2"`
+      # .golangci.yml. Pinned so a new linter release cannot turn CI red on
+      # its own.
+      - uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.13.1

@@ -108,6 +108,7 @@ func New(ctx widget.Context) (widget.Widget, error) {
 	return &Notes{name: ctx.Name, cfg: cfg, theme: ctx.Theme, editor: ctx.Editor}, nil
 }
 
+// Title is the label drawn in the widget frame.
 func (n *Notes) Title() string { return n.cfg.Title }
 
 // Init kicks off the first directory scan.
@@ -332,7 +333,7 @@ func readPreview(path string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	buf := make([]byte, maxPreviewBytes)
 	nRead, err := io.ReadFull(f, buf)

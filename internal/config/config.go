@@ -4,7 +4,6 @@
 //
 //	<dir>/config.yaml            global settings
 //	<dir>/dashboards/<name>.yaml one dashboard each
-//
 package config
 
 import (
@@ -109,7 +108,7 @@ type Dashboard struct {
 // runs on defaults so a first launch works before `ctos init`.
 func Load(dir string) (*Config, error) {
 	cfg := &Config{Dir: dir}
-	path := ConfigFile(dir)
+	path := SettingsFile(dir)
 
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {

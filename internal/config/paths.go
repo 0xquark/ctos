@@ -76,5 +76,5 @@ func ExpandPath(p string) string {
 // DashboardsDir is where dashboard YAML files live inside a config directory.
 func DashboardsDir(dir string) string { return filepath.Join(dir, "dashboards") }
 
-// ConfigFile is the global settings file inside a config directory.
-func ConfigFile(dir string) string { return filepath.Join(dir, "config.yaml") }
+// SettingsFile is the global settings file inside a config directory.
+func SettingsFile(dir string) string { return filepath.Join(dir, "config.yaml") }

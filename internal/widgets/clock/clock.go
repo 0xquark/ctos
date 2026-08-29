@@ -49,6 +49,7 @@ func New(ctx widget.Context) (widget.Widget, error) {
 	return &Clock{cfg: cfg, theme: ctx.Theme, now: time.Now()}, nil
 }
 
+// Title is the label drawn in the widget frame.
 func (c *Clock) Title() string { return c.cfg.Title }
 
 // Init schedules the first tick.

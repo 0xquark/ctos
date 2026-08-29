@@ -379,7 +379,7 @@ func TestScaffoldIsIdempotent(t *testing.T) {
 	}
 
 	// A second run must not clobber a user's edited config.
-	if err := os.WriteFile(ConfigFile(dir), []byte("editor: mine\n"), 0o644); err != nil {
+	if err := os.WriteFile(SettingsFile(dir), []byte("editor: mine\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	written, skipped, err = Scaffold(dir)
