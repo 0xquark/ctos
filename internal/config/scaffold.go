@@ -65,16 +65,6 @@ widgets:
     # Interface to measure. Empty sums every interface but loopback.
     interface: ""
 
-  system:
-    type: system
-    refresh: 3s
-    # Rows to show, in the order they are listed.
-    metrics: [cpu, mem, swap, disk, net, load, uptime]
-    disks: ["/"]
-    interface: ""
-    # Sparkline of the last few minutes behind each bar.
-    history: true
-
   hackernews:
     type: hackernews
     limit: 20
@@ -96,14 +86,15 @@ widgets:
     # How far back the log view looks.
     log_window: 5m
 
-# Widgets drawn as a frameless strip above the rows. "bar: [vitals]" is the
-# short form when nothing needs to sit on the right.
+# Widgets drawn as a frameless strip above the rows: vitals on the left, the
+# clock on the right. The strip is chrome, not a pane: no border, no focus,
+# one line. 
 bar:
   left: [vitals]
   right: [clock]
 
 rows:
-  - [system, notes]
+  - [notes]
   - [processes, hackernews]
 `
 
