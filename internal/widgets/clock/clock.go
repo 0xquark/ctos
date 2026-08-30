@@ -31,7 +31,6 @@ type config struct {
 	Format     string `yaml:"format"`
 	DateFormat string `yaml:"date_format"`
 	Big        bool   `yaml:"big"`
-	Title      string `yaml:"title"`
 }
 
 // Clock shows the current local time.
@@ -48,16 +47,12 @@ func New(ctx widget.Context) (widget.Widget, error) {
 		Format:     "15:04:05",
 		DateFormat: "Mon 02 Jan 2006",
 		Big:        true,
-		Title:      "clock",
 	}
 	if err := ctx.Decode(&cfg); err != nil {
 		return nil, err
 	}
 	return &Clock{cfg: cfg, theme: ctx.Theme, now: time.Now()}, nil
 }
-
-// Title is the label drawn in the widget frame.
-func (c *Clock) Title() string { return c.cfg.Title }
 
 // Init schedules the first tick.
 func (c *Clock) Init() tea.Cmd { return c.tick() }

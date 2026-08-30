@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Factory builds a widget from its dashboard configuration.
@@ -26,6 +28,11 @@ type Spec struct {
 	// as it would appear under a dashboard's "widgets:". Optional, but a
 	// widget with any configuration at all should have one.
 	Example string
+
+	// Title is the default frame label, for a type whose name does not read
+	// well as one: "hacker news" for hackernews. Falls back to Name, and a
+	// dashboard's "title:" overrides both.
+	Title string
 
 	// New builds the widget.
 	New Factory
@@ -61,9 +68,9 @@ func Register(spec Spec) {
 }
 
 // binder is satisfied by any widget embedding Base. New uses it to hand the
-// widget its own name, so addressed messages work without the factory having
-// to remember anything.
-type binder interface{ bind(string) }
+// widget its own name and frame title, so addressed messages and the frame
+// label work without the factory having to remember anything.
+type binder interface{ bind(name, title string) }
 
 // New constructs a widget of the named type.
 func New(typeName string, ctx Context) (Widget, error) {
@@ -80,9 +87,26 @@ func New(typeName string, ctx Context) (Widget, error) {
 		return nil, fmt.Errorf("%s %q: %w", typeName, ctx.Name, err)
 	}
 	if b, ok := w.(binder); ok {
-		b.bind(ctx.Name)
+		b.bind(ctx.Name, resolveTitle(spec, ctx.Node))
 	}
 	return w, nil
+}
+
+// resolveTitle picks the widget's frame label: the dashboard's "title:" when
+// it is written, then the type's own default, then the type name. An explicit
+// empty title is honoured, so a widget can be given a bare frame.
+func resolveTitle(spec Spec, node *yaml.Node) string {
+	if node != nil && node.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			if node.Content[i].Value == "title" {
+				return node.Content[i+1].Value
+			}
+		}
+	}
+	if spec.Title != "" {
+		return spec.Title
+	}
+	return spec.Name
 }
 
 // Lookup returns the spec for a widget type.

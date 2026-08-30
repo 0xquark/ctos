@@ -4,16 +4,31 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-// shellKeys are the keys the dashboard loader owns. They appear in every
-// widget's YAML block but belong to no widget's config struct, so Decode
-// passes over them rather than reporting them as unknown.
-var shellKeys = map[string]bool{"type": true}
+// shellKeys are the keys the shell owns. They appear in a widget's YAML block
+// but belong to no widget's config struct — "type:" selects the widget and
+// "title:" labels its frame, both handled by the registry — so Decode passes
+// over them rather than reporting them as unknown.
+var shellKeys = map[string]bool{"type": true, "title": true}
+
+// withShellKeys appends the shell's keys to a widget's own for an error
+// message, skipping any the widget happens to declare itself.
+func withShellKeys(known []string, declared map[string]bool) []string {
+	extra := make([]string, 0, len(shellKeys))
+	for k := range shellKeys {
+		if !declared[k] {
+			extra = append(extra, k)
+		}
+	}
+	slices.Sort(extra)
+	return append(slices.Clone(known), extra...)
+}
 
 // Decode unmarshals this widget's YAML block into cfg, a pointer to a struct
 // whose fields carry `yaml:` tags. Set cfg's defaults before calling: a key
@@ -64,8 +79,10 @@ func checkKeys(node *yaml.Node, cfg any) error {
 			continue
 		}
 		msg := fmt.Sprintf("line %d: unknown key %q", node.Content[i].Line, key)
-		if len(known) > 0 {
-			msg += fmt.Sprintf(" (valid keys: %s)", strings.Join(known, ", "))
+		// The shell's own keys are valid here too: someone who mistypes
+		// "title" needs to see it offered back.
+		if valid := withShellKeys(known, index); len(valid) > 0 {
+			msg += fmt.Sprintf(" (valid keys: %s)", strings.Join(valid, ", "))
 		}
 		return errors.New(msg)
 	}

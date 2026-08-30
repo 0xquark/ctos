@@ -39,6 +39,7 @@ drawing.
        widget.Register(widget.Spec{
            Name:    "weather",
            Summary: "the forecast for one location",   // shown by `ctos widgets`
+           Title:   "weather",                         // default frame label
            New:     New,
            Example: `type: weather
    location: Bengaluru
@@ -50,18 +51,17 @@ drawing.
    type config struct {
        Location string `yaml:"location"`
        Refresh  string `yaml:"refresh"`
-       Title    string `yaml:"title"`
    }
 
    type Weather struct {
-       widget.Base          // SetSize, Focus, Blur, Actions, Cmd, Tick
+       widget.Base          // SetSize, Focus, Blur, Title, Actions, Cmd, Tick
        cfg     config
        theme   theme.Theme
        refresh time.Duration
    }
 
    func New(ctx widget.Context) (widget.Widget, error) {
-       cfg := config{Title: "weather"}          // defaults first
+       cfg := config{Refresh: "30m"}            // defaults first
        if err := ctx.Decode(&cfg); err != nil { // strict: a typo is an error
            return nil, err
        }
@@ -78,6 +78,10 @@ drawing.
 
    Return bare errors: the registry labels them with your type and the user's widget name, so
    they come out as `weather "outside": "location:" is required`.
+
+   Don't declare a `title` key. The shell owns it: the registry reads the dashboard's `title:`,
+   falls back to your `Spec.Title`, and `Base.Title` returns it. Implement `Title()` yourself
+   only if the label changes while the widget runs.
 
 2. **Fetch with `Base.Cmd`,** which delivers the result to your widget and no other:
 

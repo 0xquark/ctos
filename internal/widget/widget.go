@@ -41,7 +41,9 @@ type Widget interface {
 	Focus()
 	Blur()
 
-	// Title labels the widget's frame.
+	// Title labels the widget's frame. Base supplies it from the
+	// dashboard's "title:", so only a widget with a title that changes as
+	// it runs needs to implement this.
 	Title() string
 
 	// Actions lists what the user can do with the widget right now. The
@@ -104,17 +106,27 @@ type Context struct {
 type Base struct {
 	W, H    int
 	name    string
+	title   string
 	focused bool
 }
 
-// bind records the widget's name in the dashboard config. The registry calls
+// bind records the widget's name and resolved frame title. The registry calls
 // it after the factory returns, so a widget author cannot forget to. It is
 // unexported deliberately: only a type embedding Base can satisfy the
 // interface the registry looks for.
-func (b *Base) bind(name string) { b.name = name }
+func (b *Base) bind(name, title string) { b.name, b.title = name, title }
 
 // Name is the widget's key in the dashboard's widgets map.
 func (b *Base) Name() string { return b.name }
+
+// Title is the label drawn in the widget's frame. The registry resolves it —
+// the dashboard's "title:", then the type's default, then the type name — so
+// there is nothing to fall back to here, and a dashboard asking for `title: ""`
+// gets the bare frame it asked for.
+//
+// A widget whose title changes as it runs, such as a host that gains a
+// connection state, overrides this.
+func (b *Base) Title() string { return b.title }
 
 // SetSize records the inner content area assigned by the layout.
 func (b *Base) SetSize(w, h int) { b.W, b.H = w, h }

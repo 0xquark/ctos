@@ -43,7 +43,6 @@ type config struct {
 	Recursive  bool     `yaml:"recursive"`
 	Extensions []string `yaml:"extensions"`
 	Limit      int      `yaml:"limit"`
-	Title      string   `yaml:"title"`
 
 	// Preview shows the selected note's contents below the list.
 	Preview bool `yaml:"preview"`
@@ -100,7 +99,6 @@ func New(ctx widget.Context) (widget.Widget, error) {
 		Path:       "~/notes",
 		Extensions: []string{".md", ".txt"},
 		Limit:      200,
-		Title:      "notes",
 		Preview:    true,
 	}
 	if err := ctx.Decode(&cfg); err != nil {
@@ -114,9 +112,6 @@ func New(ctx widget.Context) (widget.Widget, error) {
 	}
 	return &Notes{cfg: cfg, theme: ctx.Theme, editor: ctx.Editor}, nil
 }
-
-// Title is the label drawn in the widget frame.
-func (n *Notes) Title() string { return n.cfg.Title }
 
 // Init kicks off the first directory scan.
 func (n *Notes) Init() tea.Cmd { return n.scan() }

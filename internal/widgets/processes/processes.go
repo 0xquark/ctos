@@ -54,7 +54,6 @@ const defaultLogWindow = 5 * time.Minute
 const minDetailHeight = 12
 
 type config struct {
-	Title       string `yaml:"title"`
 	Refresh     string `yaml:"refresh"`
 	Sort        string `yaml:"sort"`
 	User        string `yaml:"user"`
@@ -130,7 +129,7 @@ type Processes struct {
 
 // New builds a processes widget from its dashboard configuration.
 func New(ctx widget.Context) (widget.Widget, error) {
-	cfg := config{Title: "processes"}
+	var cfg config
 	if err := ctx.Decode(&cfg); err != nil {
 		return nil, err
 	}
@@ -196,9 +195,6 @@ func parseSort(s string) (procs.Sort, error) {
 		return procs.ByCPU, fmt.Errorf("invalid sort %q: use cpu, mem, pid or name", s)
 	}
 }
-
-// Title is the label drawn in the widget frame.
-func (p *Processes) Title() string { return p.cfg.Title }
 
 // Init takes the first sample.
 func (p *Processes) Init() tea.Cmd {

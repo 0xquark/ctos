@@ -23,6 +23,7 @@ import (
 func init() {
 	widget.Register(widget.Spec{
 		Name:    "hackernews",
+		Title:   "hacker news",
 		Summary: "the Hacker News front page, enter opens a story in your browser",
 		New:     New,
 		Example: `type: hackernews
@@ -44,7 +45,6 @@ const requestTimeout = 15 * time.Second
 type config struct {
 	Limit   int    `yaml:"limit"`
 	Refresh string `yaml:"refresh"`
-	Title   string `yaml:"title"`
 }
 
 type story struct {
@@ -88,7 +88,7 @@ type HackerNews struct {
 
 // New builds a hackernews widget from its dashboard configuration.
 func New(ctx widget.Context) (widget.Widget, error) {
-	cfg := config{Limit: 20, Title: "hacker news"}
+	cfg := config{Limit: 20}
 	if err := ctx.Decode(&cfg); err != nil {
 		return nil, err
 	}
@@ -104,9 +104,6 @@ func New(ctx widget.Context) (widget.Widget, error) {
 
 	return &HackerNews{cfg: cfg, theme: ctx.Theme, refresh: refresh}, nil
 }
-
-// Title is the label drawn in the widget frame.
-func (h *HackerNews) Title() string { return h.cfg.Title }
 
 // Init starts the first fetch.
 func (h *HackerNews) Init() tea.Cmd {

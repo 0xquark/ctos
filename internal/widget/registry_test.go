@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"gopkg.in/yaml.v3"
 )
 
 type stub struct{ Base }
@@ -13,7 +14,6 @@ type stub struct{ Base }
 func (s *stub) Init() tea.Cmd          { return nil }
 func (s *stub) Update(tea.Msg) tea.Cmd { return nil }
 func (s *stub) View() string           { return "" }
-func (s *stub) Title() string          { return "stub" }
 
 func TestRegisterAndNew(t *testing.T) {
 	Register(Spec{Name: "test-stub", Summary: "a stub", New: func(Context) (Widget, error) { return &stub{}, nil }})
@@ -22,8 +22,8 @@ func TestRegisterAndNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.Title() != "stub" {
-		t.Errorf("got %q, want stub", w.Title())
+	if w.Title() != "test-stub" {
+		t.Errorf("title = %q, want the type name", w.Title())
 	}
 }
 
@@ -130,5 +130,58 @@ func TestRegisterRequiresDocumentation(t *testing.T) {
 			}()
 			Register(spec)
 		})
+	}
+}
+
+// The frame title is resolved by the registry, not by each widget: a
+// dashboard's "title:" wins, then the type's own default, then its name.
+func TestResolveTitle(t *testing.T) {
+	spec := Spec{Name: "hackernews", Title: "hacker news"}
+
+	cases := []struct {
+		name string
+		yaml string
+		spec Spec
+		want string
+	}{
+		{"type default", "type: hackernews", spec, "hacker news"},
+		{"dashboard overrides", "type: hackernews\ntitle: orange site", spec, "orange site"},
+		{"explicit empty is honoured", "type: hackernews\ntitle: \"\"", spec, ""},
+		{"type name when the type has no default", "type: clock", Spec{Name: "clock"}, "clock"},
+		{"no config block", "", spec, "hacker news"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var node *yaml.Node
+			if tc.yaml != "" {
+				var doc yaml.Node
+				if err := yaml.Unmarshal([]byte(tc.yaml), &doc); err != nil {
+					t.Fatal(err)
+				}
+				node = doc.Content[0]
+			}
+			if got := resolveTitle(tc.spec, node); got != tc.want {
+				t.Errorf("title = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// Base supplies Title, so a widget only implements it when the title changes
+// as the widget runs.
+func TestNewBindsTheTitle(t *testing.T) {
+	Register(Spec{
+		Name:    "test-titled",
+		Title:   "a nice label",
+		Summary: "a stub",
+		New:     func(Context) (Widget, error) { return &stub{}, nil },
+	})
+
+	w, err := New("test-titled", Context{Name: "left"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := w.Title(); got != "a nice label" {
+		t.Errorf("title = %q, want %q", got, "a nice label")
 	}
 }

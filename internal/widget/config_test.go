@@ -11,7 +11,6 @@ import (
 type testConfig struct {
 	Limit   int    `yaml:"limit"`
 	Refresh string `yaml:"refresh"`
-	Title   string `yaml:"title"`
 	private int    //nolint:unused // guards that unexported fields stay hidden
 }
 
@@ -27,24 +26,24 @@ func ctxFor(t *testing.T, src string) Context {
 }
 
 func TestDecodeKeepsDefaultsForAbsentKeys(t *testing.T) {
-	cfg := testConfig{Limit: 20, Title: "hacker news"}
+	cfg := testConfig{Limit: 20, Refresh: "5m"}
 	if err := ctxFor(t, "type: hackernews\nlimit: 5\n").Decode(&cfg); err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Limit != 5 {
 		t.Errorf("limit = %d, want 5", cfg.Limit)
 	}
-	if cfg.Title != "hacker news" {
-		t.Errorf("title = %q, want the default to survive", cfg.Title)
+	if cfg.Refresh != "5m" {
+		t.Errorf("refresh = %q, want the default to survive", cfg.Refresh)
 	}
 }
 
-// "type:" belongs to the dashboard loader, not to the widget, so it must not
-// be reported as an unknown key.
+// "type:" and "title:" belong to the shell, not to the widget, so they must
+// not be reported as unknown keys.
 func TestDecodeIgnoresShellKeys(t *testing.T) {
 	var cfg testConfig
-	if err := ctxFor(t, "type: hackernews\n").Decode(&cfg); err != nil {
-		t.Fatalf("type: was treated as a widget key: %v", err)
+	if err := ctxFor(t, "type: hackernews\ntitle: news\n").Decode(&cfg); err != nil {
+		t.Fatalf("a shell key was treated as a widget key: %v", err)
 	}
 }
 
@@ -59,7 +58,7 @@ func TestDecodeRejectsUnknownKeys(t *testing.T) {
 		t.Errorf("error does not point at the offending line: %v", err)
 	}
 
-	for _, want := range []string{`unknown key "limt"`, "limit", "refresh", "title"} {
+	for _, want := range []string{`unknown key "limt"`, "limit", "refresh", "title", "type"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not mention %q", err, want)
 		}

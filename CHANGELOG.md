@@ -21,6 +21,9 @@ All notable changes to this project are documented here. The format follows
   - `Update` returns `tea.Cmd` alone; widgets are pointers and mutate in place.
   - `widget.Register` takes a `widget.Spec` carrying a summary and an example config, and
     refuses a type with no summary.
+  - `title:` is handled by the shell, like `type:`. It is resolved once by the registry and
+    returned by `widget.Base`, so widgets no longer declare a title key or a `Title()` method.
+    `title: ""` now leaves a frame unlabelled instead of falling back to a default.
 - `ctos widgets` now lists each type with a one-line summary; `ctos widgets <type>` prints a
   paste-ready configuration block.
 

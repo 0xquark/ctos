@@ -147,6 +147,10 @@ Resolved in this order:
 Run `ctos widgets` to list what your build supports, and `ctos widgets <type>` for one
 widget's keys as a block you can paste into a dashboard.
 
+Every widget takes `title`, the label drawn on its frame. It defaults to the type's own name
+(`hacker news` for `hackernews`), and `title: ""` leaves the frame bare. The keys below are
+the ones each type adds.
+
 ### `clock`
 
 | Key | Default | Meaning |
@@ -154,7 +158,6 @@ widget's keys as a block you can paste into a dashboard.
 | `format` | `15:04:05` | [Go time layout](https://pkg.go.dev/time#pkg-constants) |
 | `date_format` | `Mon 02 Jan 2006` | date line below the time |
 | `big` | `true` | draw large digits when there is room |
-| `title` | `clock` | frame label |
 
 ### `notes`
 
@@ -168,7 +171,6 @@ Lists files newest-first. `enter` opens the selected file in your editor.
 | `limit` | `200` | maximum entries |
 | `preview` | `true` | show the selected note's contents below the list |
 | `preview_lines` | `0` | rows given to the preview; `0` splits the widget in half |
-| `title` | `notes` | frame label |
 
 The preview applies light markdown styling such as headings, bullets, quotes and code fences  and
 refuses to print binary files. It disappears automatically when the widget is under 8 rows
@@ -183,7 +185,6 @@ browser.
 |---|---|---|
 | `limit` | `20` | stories to fetch (max 100) |
 | `refresh` | global default | poll interval, minimum `1m` |
-| `title` | `hacker news` | frame label |
 
 ### `processes`
 
@@ -199,7 +200,6 @@ The local process table, htop-style, with a detail pane below it.
 | `detail` | `true` | show the detail pane under the list |
 | `detail_lines` | `0` | rows given to the detail pane; `0` splits the space in half |
 | `log_window` | `5m` | how far back the log view looks |
-| `title` | `processes` | frame label |
 
 Keys, while the widget is focused:
 
