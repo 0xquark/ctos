@@ -16,6 +16,7 @@ import (
 
 	// Widget types register themselves on import.
 	_ "github.com/0xquark/ctos/internal/widgets/clock"
+	_ "github.com/0xquark/ctos/internal/widgets/git"
 	_ "github.com/0xquark/ctos/internal/widgets/hackernews"
 	_ "github.com/0xquark/ctos/internal/widgets/notes"
 	_ "github.com/0xquark/ctos/internal/widgets/processes"

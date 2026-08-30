@@ -316,7 +316,7 @@ one line — a strip that wraps stops being a strip, because it pushes the dashb
 machine gets busier and the second line gets read as a continuation rather than at a glance.
 
 ```
- CPU 10.0% │ MEM ██████▒░ 69% 16.6G/24.0G │ SWP 45% 1.4G/3.0G │ / 66% 8.5G free │ DISK 51K/s │ NET ↓15K/s ↑31K/s │ LOAD 3.82 3.43 2.78 │ TOP CPU WindowServer 9.3% │ TOP MEM Arc 769.5M
+ CPU 10.0% │ MEM ██████▒░ 69% 16.6G/24.0G │ SWP 45% 1.4G/3.0G │ / 66% 8.5G free │ DISK 51K/s │ NET ↓ 15K/s  ↑ 31K/s │ LOAD 3.82 3.43 2.78 │ TOP CPU WindowServer 9.3% │ TOP MEM Arc 769.5M
 ```
 
 Fitting a machine's vitals into one line of unknown width is the whole problem, and it is solved
@@ -332,7 +332,7 @@ whole tier apart — shortening it, then removing it — before touching anythin
 | given up first ↓ | the memory breakdown, then uptime |
 
 ```
- 200  CPU 10.0% │ MEM ██████▒░ 69% 16.6G/24.0G │ SWP 45% 1.4G/3.0G │ / 66% 8.5G free │ DISK 51K/s │ NET ↓15K/s ↑31K/s │ LOAD 3.82 3.43 2.78 │ TOP CPU WindowServer 9.3%
+ 200  CPU 10.0% │ MEM ██████▒░ 69% 16.6G/24.0G │ SWP 45% 1.4G/3.0G │ / 66% 8.5G free │ DISK 51K/s │ NET ↓ 15K/s  ↑ 31K/s │ LOAD 3.82 3.43 2.78 │ TOP CPU WindowServer 9.3%
  120  CPU 10.0% │ MEM ██████▒░ 69% 16.6G/24.0G │ SWP 45% 1.4G/3.0G │ / 66% 8.5G free │ LOAD 3.82 3.43 2.78 │ TOP WindowServer 9%
   80  CPU 10.0% │ MEM ██████▒░ 69% 16.6G/24.0G │ / 66% 8.5G │ LOAD 3.82 3.43 2.78
   40  CPU 10.0% │ MEM ██████▒░ 69%
@@ -370,12 +370,11 @@ reads full when there is one runnable task for every core.
 Activity Monitor calls "Memory Used". Counting the caches would pin the gauge near full on
 every healthy machine. Disk usage is used over used-plus-available — `df`'s own `capacity`
 column — because a filesystem's reported total includes blocks nothing can allocate; on a
-sealed macOS system volume that gap is the difference between 64% and 4% (see
-[ADR-025](docs/DECISIONS.md)).
+sealed macOS system volume that gap is the difference between 64% and 4%
 
 **Platforms.** Vitals are read from what the system already publishes rather than from a
 metrics library, so the same parsers will serve remote hosts over SSH in v0.2
-([ADR-023](docs/DECISIONS.md)).
+
 
 | | Linux | macOS |
 |---|---|---|
@@ -413,6 +412,143 @@ Lists files newest-first. `enter` opens the selected file in your editor.
 The preview applies light markdown styling such as headings, bullets, quotes and code fences  and
 refuses to print binary files. It disappears automatically when the widget is under 8 rows
 tall.
+
+### `git`
+
+The state of a set of local repositories: what branch each is on, how far it has drifted from its
+upstream, what is uncommitted, and how long ago anyone touched it. `enter` goes inside one, where
+you can stage, commit and stash; `g` hands the whole terminal to `lazygit` for anything more.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `scan` | — | find repositories under this directory |
+| `depth` | `2` | how far below `scan` to look |
+| `repos` | — | or list working trees explicitly, instead of `scan` |
+| `refresh` | `30s` | poll interval, minimum `5s` |
+| `sort` | `activity` | `activity`, `name` or `dirty` |
+| `only_interesting` | `false` | hide repositories that are clean and in sync |
+| `command` | `lazygit` | what `g` opens, in the repository's directory |
+| `detail` | `true` | draw the selected repository beside the list |
+| `detail_columns` | `0` | width of that panel; `0` gives it 55% |
+| `commits` | `8` | how much history the panel shows |
+| `limit` | `50` | maximum repositories, the most recently touched first |
+
+Set one of `scan` or `repos`, not both.
+
+```
+ 5 repos · ● 2 dirty · ↓ 1 behind · ⚠ 1                      activity
+▸ ctos                   main           ● 3 ↑ 2        12m
+  experiment             feature/x      ● 4 ↓ 1         2h
+  dotfiles               main           ✓             3d
+  detached               8f1a2b3        ✓            40d
+  broken                 not a git repository
+```
+
+`●` is work that is not committed — staged, unstaged and untracked together. `↑` and `↓` are
+commits that have not moved between here and the upstream branch; `↓` is drawn in red because it
+is the one that costs you something later. `✓` means there is nothing to say. A detached HEAD
+shows the short commit id in place of a branch, in amber.
+
+Every mark is separated from its count by a space. These glyphs are all East Asian Ambiguous, so
+a terminal is free to draw one across two columns while the width tables — and so every column
+this widget lays out — count it as one; and even where the advance is a single cell they carry
+enough ink to smudge into whatever sits against them. `● 12` reads; `●12` is one blob.
+
+`s` cycles the sort, `i` toggles `only_interesting`, `r` re-reads now. The sort is named at the
+right of the summary line, which is where you find out `s` does anything.
+
+#### The detail panel
+
+A pane wide enough draws two panels at once, the way lazygit does: what you are choosing between
+on the left, what you have chosen on the right. The panel follows the cursor, so you can see
+what is in a repository before deciding to go into it.
+
+```
+ 5 repos · ● 5 dirty                 activity  │ ctos  main  ● 5                         origin/main
+▸ ctos                 main    ● 5        31m  │ changes (5) ──────── ↵ stage · c commit · S stash
+  xrootd-monitoring-s… main    ● 1        33d  │ ▸  M  README.md
+  kecolab              cleanup ● 1        71d  │    M  cmd/ctos/main.go
+  ci-images            master  ● 1       156d  │   
+  talks                main    ● 1         1y  │   ??  internal/repos/
+                                               │
+                                               │ recent ───────────────────────────────────────────
+                                               │  31m feat(git): go inside a repo      Karan
+                                               │   1h refactor(widget): let the shel…  Karan
+```
+
+`enter` (or `→`) moves the cursor into the changes panel; `esc` (or `←`) moves it back. Only the
+panel holding the cursor draws a lit `▸`, because two of them would each claim to be where the
+next keystroke lands. Below about 55 columns there is no room to divide, so the pane shows
+whichever panel the cursor is in.
+
+The two status letters are git's own: the first is what is recorded for the next commit, drawn in
+green, and the second is what has changed on top of that, in amber. `MM` is a file with staged
+changes and further edits since.
+
+History is read for the selected repository only — a third `git` command for every repository on
+every refresh would be paying for the ones nobody is looking at — and cached by path, so moving
+the cursor and coming back does not read it again.
+
+| Key | Does |
+|---|---|
+| `enter` / `space` | stage the file under the cursor, or unstage it if it is already staged |
+| `a` / `u` | stage everything, including untracked files / unstage everything |
+| `c` | commit what is staged — type the message, `enter` to run it, `esc` to abandon it |
+| `S` / `p` | stash, untracked files included / pop the last stash |
+| `f` | fetch |
+| `g` | hand the whole terminal to `lazygit` |
+| `esc` | back to the repository list |
+
+**Where the line is.** Staging, committing and stashing are one-shot commands that either work
+or fail with a message worth reading, which is what makes them safe to put a keystroke away.
+A rebase is not: it is an interactive session with an editor, a conflict resolution and a state
+machine, and reimplementing that in a dashboard pane would be a worse lazygit. So `g` hands the
+terminal over and takes it back on exit, which is what ADR-001 built `tea.ExecProcess` for.
+
+While the commit box is open it owns the whole keyboard, so typing `q` types a `q`. One
+operation runs at a time — two git processes writing the same index is how a repository ends up
+with a stale lock file — and the list re-reads itself when each one finishes. Paths go back to
+git as argv entries after a `--`, so a file called `--force` is a file.
+
+Fetch is the one operation that touches the network, and it is deliberately manual: a dashboard
+that fetched on a timer would be making network calls, and possibly asking for a passphrase, on
+its own schedule rather than yours.
+
+**Keys and columns.** The branch is the first column to go as the pane narrows — it is the widest
+and the least urgent — then the age. The name and the state survive to the end, because they are
+the pair that answers "is there anything to do here?". At one line tall the widget renders a
+status strip of only the repositories that want attention, which is what makes it worth putting
+in the [status bar](#status-bar):
+
+```
+ ctos ● 3 ↑ 2 │ experiment ● 4 ↓ 1 │ broken ⚠
+```
+
+**Which repositories, and in what order.** `scan` walks down from a directory; a directory
+holding `.git` *is* a repository, so it is recorded and not descended into, and dot-directories
+are skipped. `sort: activity` then orders by the committer timestamp of `HEAD`.
+
+When there are more repositories than `limit`, the cut is by how recently each one was *touched* —
+the newest mtime among `.git/HEAD`, which moves on a commit or a checkout, and `.git/index`, which
+moves on `git add`. That is two `stat` calls per candidate, made before any repository is read, so
+the limit still bounds the expensive work. Cutting a path-sorted list instead would keep the
+alphabetically-first repositories, which is the opposite of what a limit on a dashboard is for.
+An explicit `repos:` list is cut at the tail instead: the order you wrote it in is a statement
+about priority.
+
+Two things `sort: activity` cannot tell you. It is *commit* time, so a repository you have been
+editing all afternoon without committing sorts as a week old — the `●` count beside it is the
+hint, and `sort: dirty` is the view for that. And it is *committer* time, so a rebase or a
+cherry-pick moves an old branch to the top.
+
+**How it reads.** Two `git` commands per repository — `status --porcelain=v2 --branch` for the
+branch, the drift and the working tree, and `log -1` for the age — run concurrently across the
+set. Both pass `--no-optional-locks`, so polling a repository every thirty seconds never takes
+the index lock out from under the person working in it. Untracked entries are counted the way
+`git status` reports them, so an untracked directory counts once rather than once per file.
+
+A repository that cannot be read spends its row saying why and the others carry on; zeroed
+columns would have drawn it as clean, which is the wrong answer.
 
 ### `hackernews`
 
@@ -489,7 +625,6 @@ Two caveats worth knowing:
   what `ps` reports and the widget does not try to correct it. On Linux the same column is an
   average over the process's whole lifetime, which is blunter still. Neither sums to the
   machine's actual CPU usage, which is why the `system` widget measures that separately
-  ([ADR-024](docs/DECISIONS.md)).
 
 On a system without systemd, `journalctl` is absent and the log view says so rather than
 failing. Everything else keeps working.

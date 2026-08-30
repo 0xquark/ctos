@@ -447,7 +447,7 @@ func (s *System) diskIOChips() []chip {
 	return []chip{{
 		prio: prioDiskIO,
 		forms: []string{
-			s.text("DISK", "↓"+humanize.Rate(io.Read)+" ↑"+humanize.Rate(io.Write), st),
+			s.text("DISK", "↓ "+humanize.Rate(io.Read)+"  ↑ "+humanize.Rate(io.Write), st),
 			s.text("DISK", humanize.Rate(io.Total), st),
 		},
 	}}
@@ -462,8 +462,8 @@ func (s *System) netChips() []chip {
 	return []chip{{
 		prio: prioNet,
 		forms: []string{
-			s.text("NET", "↓"+humanize.Rate(n.Rx)+" ↑"+humanize.Rate(n.Tx), st),
-			s.text("NET", "↓"+trimRate(humanize.Rate(n.Rx))+" ↑"+trimRate(humanize.Rate(n.Tx)), st),
+			s.text("NET", "↓ "+humanize.Rate(n.Rx)+"  ↑ "+humanize.Rate(n.Tx), st),
+			s.text("NET", "↓ "+trimRate(humanize.Rate(n.Rx))+" ↑ "+trimRate(humanize.Rate(n.Tx)), st),
 		},
 	}}
 }
@@ -557,7 +557,11 @@ func (s *System) deltaText(key string, floor float64, format string, scale ...fl
 		arrow, st = "▼", s.theme.GoodStyle()
 		d = -d
 	}
-	return st.Render(arrow + fmt.Sprintf(format, d))
+	// The space is not decoration: these arrows are East Asian Ambiguous, so
+	// a terminal may draw them across two columns while the width tables
+	// count them as one, and even at one cell they are ink-heavy enough to
+	// smudge into the digit beside them.
+	return st.Render(arrow + " " + fmt.Sprintf(format, d))
 }
 
 // spaced prefixes a space to a part that may be empty, so an absent delta

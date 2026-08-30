@@ -427,8 +427,8 @@ func TestBarStyleRendersEveryValue(t *testing.T) {
 		"free 2.0G", "cache 5.0G", "wired 3.0G", "comp 8.0G",
 		"SWP 67% 2.0G/3.0G",
 		"/ 64% 10.0G free",
-		"DISK ↓12M/s ↑3.3M/s", // split, because the fixture says Linux
-		"NET ↓26K/s ↑48K/s",
+		"DISK ↓ 12M/s  ↑ 3.3M/s", // split, because the fixture says Linux
+		"NET ↓ 26K/s  ↑ 48K/s",
 		"LOAD 4.62 3.76 3.33",
 		"TOP CPU Arc 33.8%",
 		"TOP MEM BrowserHelper 3.0G",
