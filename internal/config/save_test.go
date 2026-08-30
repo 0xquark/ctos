@@ -189,3 +189,37 @@ func TestSaveRowsLeavesNoTempFiles(t *testing.T) {
 		t.Errorf("directory has %v, want only d.yaml", names)
 	}
 }
+
+// Layout mode rewrites "rows:" only. Everything else in the file, the status
+// bar included, has to come through untouched.
+func TestSaveRowsKeepsTheBar(t *testing.T) {
+	path := write(t, t.TempDir(), "d.yaml", `# my dashboard
+name: home
+widgets:
+  vitals:
+    type: system
+    style: bar
+  notes:
+    type: notes
+    path: ${HOME}/notes
+
+# the strip up top
+bar: [vitals]
+
+rows:
+  - [notes]
+`)
+	if err := SaveRows(path, [][]string{{"notes"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"bar: [vitals]", "# the strip up top", "${HOME}/notes", "# my dashboard"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("save dropped %q:\n%s", want, out)
+		}
+	}
+}

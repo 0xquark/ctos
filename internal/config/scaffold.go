@@ -34,14 +34,6 @@ const defaultDashboardYAML = `# The default ctOS dashboard.
 name: home
 
 widgets:
-  clock:
-    type: clock
-    # Go reference time layout. See pkg.go.dev/time#pkg-constants
-    format: "15:04:05"
-    date_format: "Mon 02 Jan 2006"
-    # Draw the time as large digits when there's room.
-    big: true
-
   notes:
     type: notes
     # Point this at your own notes directory.
@@ -54,6 +46,34 @@ widgets:
     preview: true
     # Rows given to the preview; 0 splits the widget in half.
     preview_lines: 0
+
+  # The clock sits at the right-hand end of the status bar, where a terminal
+  # puts the time. Give it a row of its own and it draws large block digits.
+  clock:
+    type: clock
+    format: "15:04:05"
+    date_format: "Mon 02 Jan"
+    big: true
+
+  vitals:
+    type: system
+    # "bar" is the status strip; "rows" is the panel of labelled bars.
+    style: bar
+    refresh: 3s
+    # One row per mount point.
+    disks: ["/"]
+    # Interface to measure. Empty sums every interface but loopback.
+    interface: ""
+
+  system:
+    type: system
+    refresh: 3s
+    # Rows to show, in the order they are listed.
+    metrics: [cpu, mem, swap, disk, net, load, uptime]
+    disks: ["/"]
+    interface: ""
+    # Sparkline of the last few minutes behind each bar.
+    history: true
 
   hackernews:
     type: hackernews
@@ -76,8 +96,14 @@ widgets:
     # How far back the log view looks.
     log_window: 5m
 
+# Widgets drawn as a frameless strip above the rows. "bar: [vitals]" is the
+# short form when nothing needs to sit on the right.
+bar:
+  left: [vitals]
+  right: [clock]
+
 rows:
-  - [clock, notes]
+  - [system, notes]
   - [processes, hackernews]
 `
 

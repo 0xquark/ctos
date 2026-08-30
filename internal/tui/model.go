@@ -4,6 +4,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/0xquark/ctos/internal/config"
@@ -19,6 +20,14 @@ const (
 	minHeight = 12
 )
 
+// maxBarLines bounds the status bar. Past three lines it has stopped being
+// chrome and become a widget that happens to have no border.
+const maxBarLines = 3
+
+// minRowsHeight is the space the dashboard proper keeps whatever the bar asks
+// for: one row, framed.
+const minRowsHeight = FrameOverheadY + 1
+
 // Model is the root bubbletea model.
 type Model struct {
 	cfg   *config.Config
@@ -32,6 +41,11 @@ type Model struct {
 	rows   [][]widget.Widget
 	order  []widget.Widget
 	names  []string
+
+	// barLeft and barRight hold the frameless status widgets pinned above
+	// the rows. They are deliberately not in order: the bar never takes
+	// focus, so tab cannot land on something the user cannot act on.
+	barLeft, barRight []widget.Widget
 
 	focus    int
 	w, h     int
@@ -71,7 +85,7 @@ func New(cfg *config.Config, dash *config.Dashboard) (*Model, error) {
 
 	m.rebuild("")
 	if len(m.order) == 0 {
-		return nil, fmt.Errorf("%s: dashboard has no widgets", dash.Path)
+		return nil, fmt.Errorf("%s: dashboard has no widgets in \"rows:\"", dash.Path)
 	}
 	m.order[0].Focus()
 	return m, nil
@@ -83,6 +97,8 @@ func (m *Model) rebuild(keepFocus string) {
 	m.rows = m.rows[:0]
 	m.order = m.order[:0]
 	m.names = m.names[:0]
+	m.barLeft = m.pick(m.dash.Bar.Left)
+	m.barRight = m.pick(m.dash.Bar.Right)
 
 	for _, row := range m.dash.Rows {
 		built := make([]widget.Widget, 0, len(row))
@@ -122,8 +138,8 @@ func (m *Model) focusedName() string {
 
 // Init starts every widget.
 func (m *Model) Init() tea.Cmd {
-	cmds := make([]tea.Cmd, 0, len(m.order))
-	for _, w := range m.order {
+	cmds := make([]tea.Cmd, 0, len(m.byName))
+	for _, w := range m.byName {
 		if cmd := w.Init(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -136,37 +152,49 @@ func (m *Model) Init() tea.Cmd {
 // them, and anything else — resize, and messages from outside any widget — is
 // broadcast.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	cmd := m.update(msg)
+	// The status bar is as tall as it currently needs to be, so the rows
+	// below it are re-measured after every message rather than only when
+	// the terminal changes size. Without this a bar that grows from one
+	// line to two on its first sample would overlap the row beneath it.
+	if !m.dash.Bar.Empty() {
+		m.resize()
+	}
+	return m, cmd
+}
+
+func (m *Model) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
 		m.ready = true
 		m.resize()
-		return m, nil
+		return nil
 
 	case tea.KeyMsg:
 		// In layout mode the arrows rearrange widgets rather than
 		// scrolling inside one, so nothing falls through.
 		if m.layoutMode {
-			return m, m.layoutKey(msg)
+			return m.layoutKey(msg)
 		}
 		// A widget typing a filter query owns the whole keyboard; otherwise
 		// "q" would quit mid-word. ctrl+c still gets out.
 		if widget.Grabbing(m.focused()) {
 			if msg.String() == "ctrl+c" {
-				return m, tea.Quit
+				return tea.Quit
 			}
-			return m, m.updateFocused(msg)
+			return m.updateFocused(msg)
 		}
 		if cmd, handled := m.globalKey(msg); handled {
-			return m, cmd
+			return cmd
 		}
-		return m, m.updateFocused(msg)
+		return m.updateFocused(msg)
 
 	case widget.Addressed:
-		return m, m.deliver(msg.Name, msg.Msg)
+		return m.deliver(msg.Name, msg.Msg)
 	}
 
-	return m, m.broadcast(msg)
+	return m.broadcast(msg)
 }
 
 // globalKey handles dashboard-level bindings. It reports whether the key was
@@ -372,11 +400,15 @@ func (m *Model) footerHeight() int {
 }
 
 // resize recomputes every widget's content area.
+//
+// The bar is sized first and the rows get what is left, because the bar's
+// height is not the layout's to choose: it is however many lines the strip
+// needs to say what it has.
 func (m *Model) resize() {
 	if !m.ready {
 		return
 	}
-	boxes := Layout(m.dash.Rows, m.w, m.h-m.footerHeight())
+	boxes := Layout(m.dash.Rows, m.w, m.h-m.footerHeight()-m.sizeBar())
 
 	for i, row := range m.rows {
 		for j, w := range row {
@@ -387,6 +419,123 @@ func (m *Model) resize() {
 		}
 	}
 }
+
+// pick resolves widget names to the widgets themselves, skipping any the
+// dashboard does not define. Names are validated at load; this is defensive.
+func (m *Model) pick(names []string) []widget.Widget {
+	out := make([]widget.Widget, 0, len(names))
+	for _, name := range names {
+		if w, ok := m.byName[name]; ok {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// barWidgets is every widget in the bar, both groups.
+func (m *Model) barWidgets() []widget.Widget {
+	return append(slices.Clone(m.barLeft), m.barRight...)
+}
+
+// barHeight is how many lines the strip takes: the most any one widget in it
+// wants, since they share the line rather than stacking.
+//
+// A bar is chrome, so it never grows so far that the dashboard beneath it has
+// nowhere to go.
+func (m *Model) barHeight() int {
+	all := m.barWidgets()
+	if len(all) == 0 {
+		return 0
+	}
+
+	h := 0
+	for _, w := range all {
+		h = max(h, widget.LinesFor(w, m.w, 1, maxBarLines))
+	}
+	return min(h, max(0, m.h-m.footerHeight()-minRowsHeight))
+}
+
+// sizeBar hands each bar widget its room and returns the height of the strip.
+//
+// The right-hand group is measured first and the left-hand group gets what is
+// left, because the right is the fixed part: a clock is as wide as a clock,
+// while a vitals strip will fill whatever it is given. Doing it the other way
+// round would leave the clock to be squeezed by a value that could have given
+// up a digit instead.
+func (m *Model) sizeBar() int {
+	all := m.barWidgets()
+	if len(all) == 0 {
+		return 0
+	}
+
+	// Each widget is offered the ceiling first, so what it reports back is
+	// what it wants rather than what it was last given.
+	for _, w := range all {
+		w.SetSize(m.w, maxBarLines)
+	}
+	h := m.barHeight()
+	if h == 0 {
+		return 0
+	}
+
+	// The right group may take at most a third of the strip: it is a
+	// trailing detail, not the point of the bar.
+	for _, w := range m.barRight {
+		w.SetSize(m.w/3, h)
+	}
+	right := m.renderGroup(m.barRight)
+
+	leftW := m.w
+	if right != "" {
+		leftW = max(0, m.w-lipgloss.Width(right)-barGroupGap)
+	}
+	for _, w := range m.barLeft {
+		w.SetSize(leftW, h)
+	}
+	return h
+}
+
+// barGroupGap is the least space kept between the two groups, so a full bar
+// does not run its last value into the clock.
+const barGroupGap = 2
+
+// renderGroup draws one side of the bar, trimming the padding a widget may
+// have added: the strip positions its own content, so a widget that centred
+// itself in the width it was given would arrive pre-padded and could not be
+// aligned.
+func (m *Model) renderGroup(ws []widget.Widget) string {
+	parts := make([]string, 0, len(ws))
+	for _, w := range ws {
+		if v := strings.TrimSpace(w.View()); v != "" {
+			parts = append(parts, v)
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, m.theme.FaintStyle().Render(" │ "))
+}
+
+// barView renders the strip: the left group from the left edge, the right
+// group flush against the right.
+func (m *Model) barView() string {
+	left, right := m.renderGroup(m.barLeft), m.renderGroup(m.barRight)
+	switch {
+	case left == "" && right == "":
+		return ""
+	case right == "":
+		return " " + left
+	case left == "":
+		return lipgloss.PlaceHorizontal(m.w, lipgloss.Right, right)
+	}
+
+	gap := max(barGroupGap, m.w-lipgloss.Width(left)-lipgloss.Width(right)-indent)
+	return lipgloss.JoinHorizontal(lipgloss.Top, " "+left, strings.Repeat(" ", gap), right)
+}
+
+// indent is the leading space the dashboard's widgets start their content
+// with, matched here so the bar lines up with the frames below it.
+const indent = 1
 
 // View renders the whole dashboard.
 func (m *Model) View() string {
@@ -399,7 +548,12 @@ func (m *Model) View() string {
 			minWidth, minHeight, m.w, m.h))
 	}
 
-	boxes := Layout(m.dash.Rows, m.w, m.h-m.footerHeight())
+	bar := m.barView()
+	barH := 0
+	if bar != "" {
+		barH = lipgloss.Height(bar)
+	}
+	boxes := Layout(m.dash.Rows, m.w, m.h-m.footerHeight()-barH)
 
 	rendered := make([]string, 0, len(m.rows))
 	for i, row := range m.rows {
@@ -414,7 +568,11 @@ func (m *Model) View() string {
 	}
 
 	dashboard := lipgloss.JoinVertical(lipgloss.Left, rendered...)
-	return strings.TrimRight(dashboard, "\n") + "\n" + m.footerView()
+	out := strings.TrimRight(dashboard, "\n") + "\n" + m.footerView()
+	if bar != "" {
+		out = bar + "\n" + out
+	}
+	return out
 }
 
 // frameState decides how a widget's border is drawn.

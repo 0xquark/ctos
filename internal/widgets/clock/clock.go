@@ -9,12 +9,13 @@ import (
 	"github.com/0xquark/ctos/internal/widget"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func init() {
 	widget.Register(widget.Spec{
 		Name:    "clock",
-		Summary: "the current time, drawn as large block digits",
+		Summary: "the current time, as large block digits or a one-line strip",
 		New:     New,
 		Example: `type: clock
 format: "15:04:05"        # Go time layout
@@ -79,6 +80,14 @@ func (c *Clock) View() string {
 	timeStr := c.now.Format(c.cfg.Format)
 	dateStr := c.now.Format(c.cfg.DateFormat)
 
+	// A one-line clock is a strip, not a panel. It renders exactly its own
+	// text and no padding, because whatever placed it — the status bar,
+	// today — has to be able to measure and position it; a clock that
+	// centred itself in the width it was given could not be right-aligned.
+	if c.H == 1 {
+		return c.line(timeStr, dateStr)
+	}
+
 	var body string
 	if big, ok := c.renderBig(timeStr); ok {
 		body = big
@@ -94,6 +103,22 @@ func (c *Clock) View() string {
 		return out
 	}
 	return lipgloss.Place(c.W, c.H, lipgloss.Center, lipgloss.Center, out)
+}
+
+// line renders the clock as one row: the date a shade back, then the time.
+// The date is dropped rather than truncated when there is no room for it,
+// since half a date is worse than none and the time is the point.
+func (c *Clock) line(timeStr, dateStr string) string {
+	now := c.theme.AccentStyle().Bold(true).Render(timeStr)
+	if dateStr == "" {
+		return ansi.Truncate(now, c.W, "")
+	}
+
+	full := c.theme.DimStyle().Render(dateStr) + "  " + now
+	if c.W <= 0 || lipgloss.Width(full) <= c.W {
+		return full
+	}
+	return ansi.Truncate(now, c.W, "")
 }
 
 // glyphs are 3 rows tall and 3 cells wide, drawn with the same rounded box

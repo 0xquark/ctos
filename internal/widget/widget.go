@@ -159,3 +159,25 @@ func Grabbing(w Widget) bool {
 	g, ok := w.(KeyGrabber)
 	return ok && g.GrabsKeys()
 }
+
+// Liner is an optional interface for a widget that can say how tall its
+// content wants to be at a given width.
+//
+// Only the status bar asks. A widget inside a row is told its size, because a
+// row's height belongs to the layout — but a frameless strip has no border to
+// bound it and no neighbours to share with, so its height is a property of
+// what it currently has to say. A bar widget that has not loaded yet asks for
+// one line and grows when it has more.
+type Liner interface {
+	Lines(width int) int
+}
+
+// LinesFor returns w's preferred height at this width, clamped to
+// [1, max]. A widget that does not implement Liner gets def.
+func LinesFor(w Widget, width, def, maxLines int) int {
+	n := def
+	if l, ok := w.(Liner); ok {
+		n = l.Lines(width)
+	}
+	return min(max(n, 1), maxLines)
+}

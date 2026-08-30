@@ -428,3 +428,160 @@ func TestScaffoldedConfigLoads(t *testing.T) {
 		t.Fatalf("shipped home.yaml does not load: %v", err)
 	}
 }
+
+// The status bar is a second place a widget can be placed, so every check
+// that "rows:" gets has to hold across both.
+func TestLoadDashboardBar(t *testing.T) {
+	path := write(t, t.TempDir(), "d.yaml", `
+name: home
+widgets:
+  vitals:
+    type: system
+  notes:
+    type: notes
+bar: [vitals]
+rows:
+  - [notes]
+`)
+	d, err := LoadDashboard(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Bar.Left) != 1 || d.Bar.Left[0] != "vitals" {
+		t.Errorf("Bar.Left = %v, want [vitals]", d.Bar.Left)
+	}
+	if len(d.Rows) != 1 || d.Rows[0][0] != "notes" {
+		t.Errorf("Rows = %v, want [[notes]]", d.Rows)
+	}
+}
+
+func TestLoadDashboardBarErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		want string
+	}{
+		{
+			"unknown widget in bar",
+			"name: d\nwidgets:\n  a:\n    type: clock\nbar: [nope]\nrows:\n  - [a]\n",
+			`bar[0] references widget "nope"`,
+		},
+		{
+			"placed twice",
+			"name: d\nwidgets:\n  a:\n    type: clock\nbar: [a]\nrows:\n  - [a]\n",
+			"more than once",
+		},
+		{
+			// A bar is chrome above a dashboard; it cannot be the
+			// whole dashboard, because nothing would take focus.
+			"nothing but a bar",
+			"name: d\nwidgets:\n  a:\n    type: clock\nbar: [a]\n",
+			`needs at least one widget in "rows:"`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			path := write(t, t.TempDir(), "d.yaml", tc.yaml)
+			_, err := LoadDashboard(path)
+			if err == nil {
+				t.Fatal("want an error, got none")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q should contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// A widget in the bar counts as placed, so the "defined but never placed"
+// check must not fire on it.
+func TestBarWidgetCountsAsPlaced(t *testing.T) {
+	path := write(t, t.TempDir(), "d.yaml", `
+name: d
+widgets:
+  vitals:
+    type: system
+  a:
+    type: clock
+bar: [vitals]
+`)
+	d, err := LoadDashboard(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Rows were not written, so the remaining widgets stack — but the bar
+	// widget is not stacked as well.
+	if len(d.Rows) != 1 || d.Rows[0][0] != "a" {
+		t.Errorf("Rows = %v, want [[a]]", d.Rows)
+	}
+}
+
+// The bar takes a plain list when everything sits on the left, and a mapping
+// when something belongs at the far end.
+func TestLoadDashboardBarGroups(t *testing.T) {
+	path := write(t, t.TempDir(), "d.yaml", `
+name: home
+widgets:
+  vitals:
+    type: system
+  clock:
+    type: clock
+  notes:
+    type: notes
+bar:
+  left: [vitals]
+  right: [clock]
+rows:
+  - [notes]
+`)
+	d, err := LoadDashboard(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Bar.Left) != 1 || d.Bar.Left[0] != "vitals" {
+		t.Errorf("Bar.Left = %v", d.Bar.Left)
+	}
+	if len(d.Bar.Right) != 1 || d.Bar.Right[0] != "clock" {
+		t.Errorf("Bar.Right = %v", d.Bar.Right)
+	}
+	// Both groups are validated and both count as placing a widget.
+	if want := []string{"vitals", "clock"}; len(d.Bar.Names()) != 2 || d.Bar.Names()[1] != want[1] {
+		t.Errorf("Names = %v, want %v", d.Bar.Names(), want)
+	}
+}
+
+func TestLoadDashboardBarGroupErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		want string
+	}{
+		{
+			"unknown group",
+			"name: d\nwidgets:\n  a:\n    type: clock\nbar:\n  middle: [a]\nrows:\n  - [a]\n",
+			`unknown key "middle"`,
+		},
+		{
+			"not a list or a mapping",
+			"name: d\nwidgets:\n  a:\n    type: clock\nbar: nonsense\nrows:\n  - [a]\n",
+			`takes a list of widget names`,
+		},
+		{
+			"in the bar twice",
+			"name: d\nwidgets:\n  a:\n    type: clock\n  b:\n    type: clock\nbar:\n  left: [a]\n  right: [a]\nrows:\n  - [b]\n",
+			"more than once",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := LoadDashboard(write(t, t.TempDir(), "d.yaml", tc.yaml))
+			if err == nil {
+				t.Fatal("want an error, got none")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Errorf("error %q should contain %q", err, tc.want)
+			}
+		})
+	}
+}

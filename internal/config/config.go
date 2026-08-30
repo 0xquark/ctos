@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -96,6 +97,11 @@ type Dashboard struct {
 	Name    string                `yaml:"name"`
 	Widgets map[string]WidgetSpec `yaml:"widgets"`
 
+	// Bar names widgets drawn as a frameless strip pinned above the rows.
+	// A bar widget never takes focus and is not part of the grid, so it is
+	// held separately rather than as a special row.
+	Bar Bar `yaml:"bar"`
+
 	// Rows lays out widget names: each inner slice is one row, and widgets
 	// in a row split the available width.
 	Rows [][]string `yaml:"rows"`
@@ -161,6 +167,7 @@ func LoadDashboard(path string) (*Dashboard, error) {
 	var raw struct {
 		Name    string               `yaml:"name"`
 		Widgets map[string]yaml.Node `yaml:"widgets"`
+		Bar     Bar                  `yaml:"bar"`
 		Rows    [][]string           `yaml:"rows"`
 	}
 	if err := root.Decode(&raw); err != nil {
@@ -169,6 +176,7 @@ func LoadDashboard(path string) (*Dashboard, error) {
 
 	d := &Dashboard{
 		Name:    raw.Name,
+		Bar:     raw.Bar,
 		Rows:    raw.Rows,
 		Path:    path,
 		Widgets: make(map[string]WidgetSpec, len(raw.Widgets)),
@@ -198,27 +206,88 @@ func LoadDashboard(path string) (*Dashboard, error) {
 	return d, nil
 }
 
+// Bar is the frameless strip above the rows.
+//
+// It takes either a plain list of widget names, which all sit on the left, or
+// a mapping with "left:" and "right:" groups. The list form is the common case
+// and stays the short one; the mapping exists because a clock or a hostname
+// belongs at the far end of a status line, where the eye expects it and where
+// it will not move as the values to its left change width.
+type Bar struct {
+	Left  []string `yaml:"left"`
+	Right []string `yaml:"right"`
+}
+
+// UnmarshalYAML accepts both spellings.
+func (b *Bar) UnmarshalYAML(node *yaml.Node) error {
+	switch node.Kind {
+	case yaml.SequenceNode:
+		return node.Decode(&b.Left)
+
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			switch key := node.Content[i].Value; key {
+			case "left", "right":
+			default:
+				return fmt.Errorf("line %d: unknown key %q under \"bar:\" (valid keys: left, right)",
+					node.Content[i].Line, key)
+			}
+		}
+		// The alias avoids recursing back into this method.
+		type barFields Bar
+		var f barFields
+		if err := node.Decode(&f); err != nil {
+			return err
+		}
+		*b = Bar(f)
+		return nil
+
+	default:
+		return fmt.Errorf("line %d: \"bar:\" takes a list of widget names, or \"left:\" and \"right:\" lists", node.Line)
+	}
+}
+
+// Names is every widget in the bar, left group first.
+func (b Bar) Names() []string {
+	return append(slices.Clone(b.Left), b.Right...)
+}
+
+// Empty reports whether the dashboard has no status bar.
+func (b Bar) Empty() bool { return len(b.Left)+len(b.Right) == 0 }
+
 // validate checks that rows and widgets agree with each other.
 func (d *Dashboard) validate() error {
 	if len(d.Widgets) == 0 {
 		return fmt.Errorf("no widgets defined")
 	}
 
-	// A dashboard with no rows stacks every widget vertically, in name
-	// order, so a minimal file still renders.
-	if len(d.Rows) == 0 {
-		names := make([]string, 0, len(d.Widgets))
-		for name := range d.Widgets {
-			names = append(names, name)
+	seen := map[string]bool{}
+	for i, name := range d.Bar.Names() {
+		if _, ok := d.Widgets[name]; !ok {
+			return fmt.Errorf("bar[%d] references widget %q, which is not defined under \"widgets:\" (defined: %s)",
+				i, name, strings.Join(d.widgetNames(), ", "))
 		}
-		sort.Strings(names)
-		for _, name := range names {
-			d.Rows = append(d.Rows, []string{name})
+		if seen[name] {
+			return fmt.Errorf("widget %q appears in \"bar:\" more than once", name)
+		}
+		seen[name] = true
+	}
+
+	// A dashboard with no rows stacks every widget vertically, in name
+	// order, so a minimal file still renders. Anything already in the bar
+	// stays there rather than being stacked as well.
+	if len(d.Rows) == 0 {
+		for _, name := range d.widgetNames() {
+			if !seen[name] {
+				d.Rows = append(d.Rows, []string{name})
+			}
+		}
+		if len(d.Rows) == 0 {
+			return fmt.Errorf("every widget is in \"bar:\"; a dashboard needs at least one widget in \"rows:\"")
 		}
 		return nil
 	}
 
-	seen := map[string]bool{}
 	for i, row := range d.Rows {
 		if len(row) == 0 {
 			return fmt.Errorf("rows[%d] is empty", i)
@@ -229,14 +298,14 @@ func (d *Dashboard) validate() error {
 					i, name, strings.Join(d.widgetNames(), ", "))
 			}
 			if seen[name] {
-				return fmt.Errorf("widget %q appears in \"rows:\" more than once", name)
+				return fmt.Errorf("widget %q appears in \"rows:\" or \"bar:\" more than once", name)
 			}
 			seen[name] = true
 		}
 	}
 	for _, name := range d.widgetNames() {
 		if !seen[name] {
-			return fmt.Errorf("widget %q is defined but never placed in \"rows:\"", name)
+			return fmt.Errorf("widget %q is defined but never placed in \"rows:\" or \"bar:\"", name)
 		}
 	}
 	return nil

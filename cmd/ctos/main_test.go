@@ -42,10 +42,21 @@ func TestScaffoldedDashboardBuildsAndRenders(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	out := m.View()
-	for _, want := range []string{"clock", "notes", "processes", "hacker news"} {
+	for _, want := range []string{"system", "notes", "processes", "hacker news"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the rendered starter dashboard is missing %q", want)
 		}
+	}
+
+	// The clock is in the status bar rather than the grid, so it has no
+	// frame title to look for. What it must not be is missing: the strip
+	// is the first line, and it is drawn without a border.
+	first, _, _ := strings.Cut(out, "\n")
+	if strings.ContainsAny(first, "╭╮") {
+		t.Errorf("the first line should be the frameless status bar, got %q", first)
+	}
+	if strings.TrimSpace(first) == "" {
+		t.Errorf("the status bar rendered nothing")
 	}
 }
 
