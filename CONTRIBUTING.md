@@ -26,50 +26,117 @@ Run against a throwaway config instead of your real one:
 ## Adding a widget
 
 A widget is one package under `internal/widgets/`. It implements
-[`widget.Widget`](internal/widget/widget.go) and registers itself.
+[`widget.Widget`](internal/widget/widget.go) and registers itself. The shell handles message
+routing, cursor scrolling and config decoding, so a widget is mostly its own data and its own
+drawing.
 
 1. **Create the package.**
 
    ```go
    package weather
 
-   func init() { widget.Register("weather", New) }
+   func init() {
+       widget.Register(widget.Spec{
+           Name:    "weather",
+           Summary: "the forecast for one location",   // shown by `ctos widgets`
+           New:     New,
+           Example: `type: weather
+   location: Bengaluru
+   refresh: 30m
+   title: weather`,
+       })
+   }
 
    type config struct {
        Location string `yaml:"location"`
+       Refresh  string `yaml:"refresh"`
        Title    string `yaml:"title"`
    }
 
    type Weather struct {
-       widget.Base          // supplies SetSize, Focus, Blur, Actions
-       cfg   config
-       theme theme.Theme
+       widget.Base          // SetSize, Focus, Blur, Actions, Cmd, Tick
+       cfg     config
+       theme   theme.Theme
+       refresh time.Duration
    }
 
    func New(ctx widget.Context) (widget.Widget, error) {
        cfg := config{Title: "weather"}          // defaults first
-       if ctx.Node != nil {
-           if err := ctx.Node.Decode(&cfg); err != nil {
-               return nil, fmt.Errorf("weather %q: %w", ctx.Name, err)
-           }
+       if err := ctx.Decode(&cfg); err != nil { // strict: a typo is an error
+           return nil, err
        }
-       return &Weather{cfg: cfg, theme: ctx.Theme}, nil
+       if cfg.Location == "" {
+           return nil, errors.New(`"location:" is required`)
+       }
+       refresh, err := ctx.Refresh(cfg.Refresh, 30*time.Minute, time.Minute)
+       if err != nil {
+           return nil, err
+       }
+       return &Weather{cfg: cfg, theme: ctx.Theme, refresh: refresh}, nil
    }
    ```
 
-2. **Register it** by adding a blank import to `cmd/ctos/main.go`.
+   Return bare errors: the registry labels them with your type and the user's widget name, so
+   they come out as `weather "outside": "location:" is required`.
 
-3. **Document it** in the README's widget table — every key, its default, and its meaning.
+2. **Fetch with `Base.Cmd`,** which delivers the result to your widget and no other:
 
-4. **Test it.** At minimum, cover config validation and whatever parses or does arithmetic.
+   ```go
+   func (w *Weather) Init() tea.Cmd { return w.fetch() }
+
+   func (w *Weather) fetch() tea.Cmd {
+       location := w.cfg.Location
+       return w.Cmd(func() tea.Msg {
+           forecast, err := lookup(location)
+           return loadedMsg{forecast: forecast, err: err}
+       })
+   }
+
+   func (w *Weather) Update(msg tea.Msg) tea.Cmd {
+       if msg, ok := msg.(loadedMsg); ok {
+           w.forecast, w.err = msg.forecast, msg.err
+           return w.Every(w.refresh, refreshMsg{})   // Tick, addressed to you
+       }
+       return nil
+   }
+   ```
+
+   Your message types need no name field and no filter. Two `weather` widgets on one dashboard
+   each see only their own results.
+
+3. **If it is a list,** embed a [`widget.List`](internal/widget/list.go) rather than your own
+   cursor and offset. It owns the selection, the clamping and the standard keys:
+
+   ```go
+   func (w *Weather) Update(msg tea.Msg) tea.Cmd {
+       if msg, ok := msg.(tea.KeyMsg); ok && w.list.HandleKey(msg, w.H) {
+           return nil                     // ↑/k ↓/j pgup pgdown home/g end/G
+       }
+       ...
+   }
+
+   func (w *Weather) View() string {
+       start, end := w.list.Window(w.H)   // scrolled to keep the cursor visible
+       ...
+   }
+   ```
+
+4. **Wire it in** by adding a blank import to `cmd/ctos/main.go`.
+
+5. **Document it** in the README's widget table, and in your `Spec` — the `Summary` and
+   `Example` are what `ctos widgets` and `ctos widgets weather` print. A test builds every
+   registered widget from its own `Example`, so an example that drifts fails CI.
+
+6. **Test it.** At minimum, cover config validation and whatever parses or does arithmetic.
 
 ### Rules widgets must follow
 
 - **Never block.** All I/O goes in a `tea.Cmd` that returns a message. A widget that calls
   `http.Get` in `View()` freezes the whole dashboard.
-- **Tag your messages.** Every widget gets `ctx.Name`. Async result messages carry it, and
-  `Update` ignores messages belonging to another widget; non-key messages are broadcast to
-  everyone.
+- **Send with `Base.Cmd`, `Base.Tick` or `Base.Every`.** They address the result to you, which
+  is what keeps two widgets of the same type from consuming each other's messages. For a
+  message produced inside a callback you do not own, such as `tea.ExecProcess`, wrap it in
+  `Base.Address`.
 - **Respect your size.** `SetSize` gives you the inner content area. Render at most that many
   columns and rows; the frame truncates anything longer, which usually means a bug.
 - **Fail visibly, not fatally.** Render the error inside your own view. Never panic, never

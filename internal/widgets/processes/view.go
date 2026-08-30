@@ -129,12 +129,10 @@ func (p *Processes) View() string {
 		return b.String()
 	}
 
-	p.scrollInto(visible)
-
-	end := min(p.offset+visible, len(p.rows))
-	for i := p.offset; i < end; i++ {
+	start, end := p.list.Window(visible)
+	for i := start; i < end; i++ {
 		b.WriteByte('\n')
-		b.WriteString(p.row(p.rows[i], cols, i == p.cursor))
+		b.WriteString(p.row(p.rows[i], cols, i == p.list.Cursor()))
 	}
 
 	if h := p.detailHeight(); h > 0 {
@@ -193,17 +191,6 @@ func (p *Processes) listHeight() int {
 		h -= d + 1 // the pane plus its rule
 	}
 	return max(0, h)
-}
-
-// scrollInto keeps the cursor within the visible window.
-func (p *Processes) scrollInto(visible int) {
-	if p.cursor < p.offset {
-		p.offset = p.cursor
-	}
-	if p.cursor >= p.offset+visible {
-		p.offset = p.cursor - visible + 1
-	}
-	p.offset = min(max(p.offset, 0), max(0, len(p.rows)-visible))
 }
 
 // headerLine is the top line: a kill prompt, a filter box, a transient status,

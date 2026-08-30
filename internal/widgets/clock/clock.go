@@ -2,7 +2,6 @@
 package clock
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -12,10 +11,20 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func init() { widget.Register("clock", New) }
+func init() {
+	widget.Register(widget.Spec{
+		Name:    "clock",
+		Summary: "the current time, drawn as large block digits",
+		New:     New,
+		Example: `type: clock
+format: "15:04:05"        # Go time layout
+date_format: "Mon 02 Jan 2006"
+big: true                 # block digits, falling back to plain text when narrow
+title: clock`,
+	})
+}
 
-// tickMsg drives the once-per-second redraw. Clocks all share one message
-// type: every clock wants every tick, so there is nothing to filter on.
+// tickMsg drives the once-per-second redraw.
 type tickMsg time.Time
 
 type config struct {
@@ -41,10 +50,8 @@ func New(ctx widget.Context) (widget.Widget, error) {
 		Big:        true,
 		Title:      "clock",
 	}
-	if ctx.Node != nil {
-		if err := ctx.Node.Decode(&cfg); err != nil {
-			return nil, fmt.Errorf("clock %q: %w", ctx.Name, err)
-		}
+	if err := ctx.Decode(&cfg); err != nil {
+		return nil, err
 	}
 	return &Clock{cfg: cfg, theme: ctx.Theme, now: time.Now()}, nil
 }
@@ -53,22 +60,22 @@ func New(ctx widget.Context) (widget.Widget, error) {
 func (c *Clock) Title() string { return c.cfg.Title }
 
 // Init schedules the first tick.
-func (c *Clock) Init() tea.Cmd { return tick() }
+func (c *Clock) Init() tea.Cmd { return c.tick() }
 
 // Update advances the displayed time.
-func (c *Clock) Update(msg tea.Msg) (widget.Widget, tea.Cmd) {
+func (c *Clock) Update(msg tea.Msg) tea.Cmd {
 	if t, ok := msg.(tickMsg); ok {
 		c.now = time.Time(t)
-		return c, tick()
+		return c.tick()
 	}
-	return c, nil
+	return nil
 }
 
 // tick fires on the next whole second, so the display stays aligned with the
 // wall clock instead of drifting by the render time.
-func tick() tea.Cmd {
+func (c *Clock) tick() tea.Cmd {
 	next := time.Now().Truncate(time.Second).Add(time.Second)
-	return tea.Tick(time.Until(next), func(t time.Time) tea.Msg { return tickMsg(t) })
+	return c.Tick(time.Until(next), func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
 // View renders the time, falling back to plain text when the block digits

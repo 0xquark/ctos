@@ -192,15 +192,14 @@ func TestCursorSurvivesShrink(t *testing.T) {
 	n := w.(*Notes)
 	n.SetSize(40, 10)
 
-	updated, _ := n.Update(loadedMsg{name: "notes", notes: []note{
+	n.Update(loadedMsg{notes: []note{
 		{display: "a.md"}, {display: "b.md"}, {display: "c.md"},
 	}})
-	n = updated.(*Notes)
-	n.cursor = 2
+	n.list.Select(2)
 
-	updated, _ = n.Update(loadedMsg{name: "notes", notes: []note{{display: "a.md"}}})
-	if got := updated.(*Notes); got.cursor != 0 {
-		t.Errorf("cursor = %d after the list shrank to 1 note, want 0", got.cursor)
+	n.Update(loadedMsg{notes: []note{{display: "a.md"}}})
+	if n.list.Cursor() != 0 {
+		t.Errorf("cursor = %d after the list shrank to 1 note, want 0", n.list.Cursor())
 	}
 }
 
@@ -254,14 +253,11 @@ func TestViewFitsItsBox(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		updated, _ := n.Update(loadedMsg{name: "notes", notes: notes})
-		n = updated.(*Notes)
-		updated, _ = n.Update(previewMsg{
-			name:  "notes",
+		n.Update(loadedMsg{notes: notes})
+		n.Update(previewMsg{
 			path:  n.selectedPath(),
 			lines: strings.Split(strings.Repeat("a line\n", 40), "\n"),
 		})
-		n = updated.(*Notes)
 
 		got := strings.Count(n.View(), "\n") + 1
 		if got != h {
@@ -280,18 +276,17 @@ func TestPreviewIgnoresStaleReads(t *testing.T) {
 	n := w.(*Notes)
 	n.SetSize(40, 20)
 
-	updated, _ := n.Update(loadedMsg{name: "notes", notes: []note{
+	n.Update(loadedMsg{notes: []note{
 		{path: "/a.md", display: "a.md"}, {path: "/b.md", display: "b.md"},
 	}})
-	n = updated.(*Notes)
 
-	updated, _ = n.Update(previewMsg{name: "notes", path: "/b.md", lines: []string{"stale"}})
-	if got := updated.(*Notes); got.previewPath == "/b.md" {
+	n.Update(previewMsg{path: "/b.md", lines: []string{"stale"}})
+	if n.previewPath == "/b.md" {
 		t.Error("accepted a preview for a note that is not selected")
 	}
 
-	updated, _ = n.Update(previewMsg{name: "notes", path: "/a.md", lines: []string{"fresh"}})
-	if got := updated.(*Notes); got.previewPath != "/a.md" {
+	n.Update(previewMsg{path: "/a.md", lines: []string{"fresh"}})
+	if n.previewPath != "/a.md" {
 		t.Error("rejected the preview for the selected note")
 	}
 }

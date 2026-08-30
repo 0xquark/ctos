@@ -15,11 +15,11 @@ type grabbingWidget struct {
 	grab bool
 }
 
-func (g *grabbingWidget) Init() tea.Cmd                           { return nil }
-func (g *grabbingWidget) Update(tea.Msg) (widget.Widget, tea.Cmd) { return g, nil }
-func (g *grabbingWidget) View() string                            { return "" }
-func (g *grabbingWidget) Title() string                           { return "grabby" }
-func (g *grabbingWidget) GrabsKeys() bool                         { return g.grab }
+func (g *grabbingWidget) Init() tea.Cmd          { return nil }
+func (g *grabbingWidget) Update(tea.Msg) tea.Cmd { return nil }
+func (g *grabbingWidget) View() string           { return "" }
+func (g *grabbingWidget) Title() string          { return "grabby" }
+func (g *grabbingWidget) GrabsKeys() bool        { return g.grab }
 
 // While a widget is taking text input it has swallowed the global keys, so the
 // footer must stop advertising them.

@@ -118,22 +118,17 @@ func TestLimitBounds(t *testing.T) {
 	}
 }
 
-// TestMessagesAreScopedByName guards the broadcast model: a widget must ignore
-// another widget's async results.
-func TestMessagesAreScopedByName(t *testing.T) {
+// A fetch result clears the loading flag and replaces the list. Scoping the
+// result to this widget is the dashboard's job — see tui.TestAddressedMessage.
+func TestLoadedMsgReplacesTheList(t *testing.T) {
 	h, err := newWidget(t, "type: hackernews\n")
 	if err != nil {
 		t.Fatal(err)
 	}
 	h.loading = true
 
-	updated, _ := h.Update(loadedMsg{name: "someone-else", stories: []story{{Title: "x"}}})
-	if got := updated.(*HackerNews); len(got.stories) != 0 || !got.loading {
-		t.Error("widget consumed a message addressed to a different widget")
-	}
-
-	updated, _ = h.Update(loadedMsg{name: "hn", stories: []story{{Title: "mine"}}})
-	if got := updated.(*HackerNews); len(got.stories) != 1 || got.loading {
+	h.Update(loadedMsg{stories: []story{{Title: "mine"}}})
+	if len(h.stories) != 1 || h.loading {
 		t.Error("widget ignored its own message")
 	}
 }

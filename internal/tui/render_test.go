@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/0xquark/ctos/internal/config"
+	"github.com/0xquark/ctos/internal/widget"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
@@ -88,10 +89,13 @@ rows:
 			if msg == nil {
 				break
 			}
-			w, cmd = w.Update(msg)
+			// Commands address their results; the dashboard normally
+			// unwraps them before delivery.
+			if a, ok := msg.(widget.Addressed); ok {
+				msg = a.Msg
+			}
+			cmd = w.Update(msg)
 		}
-		m.byName["notes"] = w
-		m.syncViews()
 	}
 	return m
 }

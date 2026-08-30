@@ -20,7 +20,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func init() { widget.Register("hackernews", New) }
+func init() {
+	widget.Register(widget.Spec{
+		Name:    "hackernews",
+		Summary: "the Hacker News front page, enter opens a story in your browser",
+		New:     New,
+		Example: `type: hackernews
+limit: 20                 # stories to fetch, 1-100
+refresh: 5m               # never polls faster than a minute
+title: hacker news`,
+	})
+}
 
 // apiURL returns the front page. Algolia serves the whole page in one request,
 // unlike the official Firebase API which needs one call per story.
@@ -56,24 +66,21 @@ func (s story) Link() string {
 }
 
 type loadedMsg struct {
-	name    string
 	stories []story
 	err     error
 }
 
-type refreshMsg struct{ name string }
+type refreshMsg struct{}
 
 // HackerNews lists front-page stories.
 type HackerNews struct {
 	widget.Base
-	name    string
 	cfg     config
 	theme   theme.Theme
 	refresh time.Duration
 
 	stories []story
-	cursor  int
-	offset  int
+	list    widget.List
 	err     error
 	loading bool
 	fetched time.Time
@@ -82,29 +89,20 @@ type HackerNews struct {
 // New builds a hackernews widget from its dashboard configuration.
 func New(ctx widget.Context) (widget.Widget, error) {
 	cfg := config{Limit: 20, Title: "hacker news"}
-	if ctx.Node != nil {
-		if err := ctx.Node.Decode(&cfg); err != nil {
-			return nil, fmt.Errorf("hackernews %q: %w", ctx.Name, err)
-		}
+	if err := ctx.Decode(&cfg); err != nil {
+		return nil, err
 	}
 	if cfg.Limit <= 0 || cfg.Limit > 100 {
 		cfg.Limit = 20
 	}
 
-	refresh := ctx.DefaultRefresh
-	if cfg.Refresh != "" {
-		d, err := time.ParseDuration(cfg.Refresh)
-		if err != nil {
-			return nil, fmt.Errorf("hackernews %q: invalid refresh %q: use a form like \"5m\"", ctx.Name, cfg.Refresh)
-		}
-		refresh = d
-	}
 	// The front page changes slowly; polling faster is just rude to the API.
-	if refresh < time.Minute {
-		refresh = time.Minute
+	refresh, err := ctx.Refresh(cfg.Refresh, 0, time.Minute)
+	if err != nil {
+		return nil, err
 	}
 
-	return &HackerNews{name: ctx.Name, cfg: cfg, theme: ctx.Theme, refresh: refresh}, nil
+	return &HackerNews{cfg: cfg, theme: ctx.Theme, refresh: refresh}, nil
 }
 
 // Title is the label drawn in the widget frame.
@@ -117,55 +115,35 @@ func (h *HackerNews) Init() tea.Cmd {
 }
 
 // Update handles navigation, fetch results and the refresh timer.
-func (h *HackerNews) Update(msg tea.Msg) (widget.Widget, tea.Cmd) {
+func (h *HackerNews) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case loadedMsg:
-		if msg.name != h.name {
-			return h, nil
-		}
 		h.loading = false
 		h.err = msg.err
 		if msg.err == nil {
 			h.stories = msg.stories
+			h.list.SetLen(len(h.stories))
 			h.fetched = time.Now()
-			if h.cursor >= len(h.stories) {
-				h.cursor = max(0, len(h.stories)-1)
-			}
 		}
-		return h, h.scheduleRefresh()
+		return h.scheduleRefresh()
 
 	case refreshMsg:
-		if msg.name != h.name || h.loading {
-			return h, nil
+		if h.loading {
+			return nil
 		}
 		h.loading = true
-		return h, h.fetch()
+		return h.fetch()
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "up", "k":
-			h.move(-1)
-		case "down", "j":
-			h.move(1)
-		case "home", "g":
-			h.cursor = 0
-		case "end", "G":
-			h.cursor = max(0, len(h.stories)-1)
-		case "r":
-			if !h.loading {
-				h.loading = true
-				return h, h.fetch()
-			}
+		if h.list.HandleKey(msg, h.perScreen()) {
+			return nil
+		}
+		if msg.String() == "r" && !h.loading {
+			h.loading = true
+			return h.fetch()
 		}
 	}
-	return h, nil
-}
-
-func (h *HackerNews) move(delta int) {
-	if len(h.stories) == 0 {
-		return
-	}
-	h.cursor = min(max(h.cursor+delta, 0), len(h.stories)-1)
+	return nil
 }
 
 // Actions exposes opening the selected story in the system browser.
@@ -179,10 +157,10 @@ func (h *HackerNews) Actions() []widget.Action {
 // open launches the story URL in the system browser without suspending the
 // TUI, since the browser is a separate window.
 func (h *HackerNews) open() tea.Cmd {
-	if h.cursor >= len(h.stories) {
+	if h.list.Empty() {
 		return nil
 	}
-	url := h.stories[h.cursor].Link()
+	url := h.stories[h.list.Cursor()].Link()
 	return func() tea.Msg {
 		_ = openBrowser(url)
 		return nil
@@ -203,17 +181,16 @@ func openBrowser(url string) error {
 }
 
 func (h *HackerNews) scheduleRefresh() tea.Cmd {
-	name := h.name
-	return tea.Tick(h.refresh, func(time.Time) tea.Msg { return refreshMsg{name: name} })
+	return h.Every(h.refresh, refreshMsg{})
 }
 
 // fetch queries Algolia off the UI goroutine.
 func (h *HackerNews) fetch() tea.Cmd {
-	name, limit := h.name, h.cfg.Limit
-	return func() tea.Msg {
+	limit := h.cfg.Limit
+	return h.Cmd(func() tea.Msg {
 		stories, err := fetchStories(limit)
-		return loadedMsg{name: name, stories: stories, err: err}
-	}
+		return loadedMsg{stories: stories, err: err}
+	})
 }
 
 // algoliaResponse mirrors only the fields we render.
@@ -290,36 +267,30 @@ func (h *HackerNews) View() string {
 		return h.theme.DimStyle().Render("no stories")
 	}
 
-	perItem := 2
-	if h.H < 4 {
-		perItem = 1
-	}
-	visible := max(1, h.H/perItem)
-
-	// Keep the cursor inside the window.
-	if h.cursor < h.offset {
-		h.offset = h.cursor
-	}
-	if h.cursor >= h.offset+visible {
-		h.offset = h.cursor - visible + 1
-	}
-	if h.offset > max(0, len(h.stories)-visible) {
-		h.offset = max(0, len(h.stories)-visible)
-	}
-
 	var b strings.Builder
-	end := min(h.offset+visible, len(h.stories))
-	for i := h.offset; i < end; i++ {
-		if i > h.offset {
+	start, end := h.list.Window(h.perScreen())
+	for i := start; i < end; i++ {
+		if i > start {
 			b.WriteByte('\n')
 		}
-		b.WriteString(h.titleLine(h.stories[i], i, i == h.cursor))
-		if perItem == 2 {
+		b.WriteString(h.titleLine(h.stories[i], i, i == h.list.Cursor()))
+		if h.twoLineRows() {
 			b.WriteByte('\n')
 			b.WriteString(h.metaLine(h.stories[i]))
 		}
 	}
 	return b.String()
+}
+
+// twoLineRows reports whether there is room for each story's metadata line.
+func (h *HackerNews) twoLineRows() bool { return h.H >= 4 }
+
+// perScreen is how many stories fit, which is also how far a page key moves.
+func (h *HackerNews) perScreen() int {
+	if h.twoLineRows() {
+		return max(1, h.H/2)
+	}
+	return max(1, h.H)
 }
 
 // titleLine renders the rank, selection marker and story title.

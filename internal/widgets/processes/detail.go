@@ -15,11 +15,12 @@ import (
 // depends on.
 func (p *Processes) detailLines(h int) []string {
 	var lines []string
-	if p.cursor < len(p.rows) {
+	if !p.list.Empty() {
+		selected := p.rows[p.list.Cursor()]
 		if p.detail == detailLogs {
-			lines = p.logLines(p.rows[p.cursor], h)
+			lines = p.logLines(selected, h)
 		} else {
-			lines = p.infoLines(p.rows[p.cursor], h)
+			lines = p.infoLines(selected, h)
 		}
 	}
 

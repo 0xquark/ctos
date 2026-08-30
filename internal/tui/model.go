@@ -25,9 +25,9 @@ type Model struct {
 	dash  *config.Dashboard
 	theme theme.Theme
 
-	// byName owns the widgets. rows and order are views onto it, rebuilt
-	// whenever the layout changes, so rearranging never reconstructs a
-	// widget and never loses its state.
+	// byName owns the widgets. rows and order hold the same pointers,
+	// rebuilt whenever the layout changes, so rearranging never
+	// reconstructs a widget and never loses its state.
 	byName map[string]widget.Widget
 	rows   [][]widget.Widget
 	order  []widget.Widget
@@ -64,7 +64,7 @@ func New(cfg *config.Config, dash *config.Dashboard) (*Model, error) {
 			DefaultRefresh: cfg.DefaultRefresh(),
 		})
 		if err != nil {
-			return nil, fmt.Errorf("%s: widget %q: %w", dash.Path, name, err)
+			return nil, fmt.Errorf("%s: %w", dash.Path, err)
 		}
 		m.byName[name] = w
 	}
@@ -131,8 +131,10 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// Update routes messages. Key messages go only to the focused widget;
-// everything else is broadcast so background refreshes reach their owner.
+// Update routes messages. Key messages go only to the focused widget, a
+// widget's own results (widget.Addressed) go only to the widget that asked for
+// them, and anything else — resize, and messages from outside any widget — is
+// broadcast.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -159,6 +161,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, m.updateFocused(msg)
+
+	case widget.Addressed:
+		return m, m.deliver(msg.Name, msg.Msg)
 	}
 
 	return m, m.broadcast(msg)
@@ -329,41 +334,29 @@ func (m *Model) moveFocus(delta int) {
 
 // updateFocused delivers a message to the focused widget only.
 func (m *Model) updateFocused(msg tea.Msg) tea.Cmd {
-	name := m.focusedName()
-	if name == "" {
+	return m.deliver(m.focusedName(), msg)
+}
+
+// deliver routes a message to one widget by name. A message for a widget that
+// is not on this dashboard is dropped, which is what makes a late result from
+// a removed widget harmless.
+func (m *Model) deliver(name string, msg tea.Msg) tea.Cmd {
+	w, ok := m.byName[name]
+	if !ok {
 		return nil
 	}
-	updated, cmd := m.byName[name].Update(msg)
-	m.byName[name] = updated
-	m.syncViews()
-	return cmd
+	return w.Update(msg)
 }
 
 // broadcast delivers a message to every widget.
 func (m *Model) broadcast(msg tea.Msg) tea.Cmd {
 	var cmds []tea.Cmd
-	for name, w := range m.byName {
-		updated, cmd := w.Update(msg)
-		m.byName[name] = updated
-		if cmd != nil {
+	for _, w := range m.byName {
+		if cmd := w.Update(msg); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	}
-	m.syncViews()
 	return tea.Batch(cmds...)
-}
-
-// syncViews refreshes rows and order after Update returned new widget values.
-func (m *Model) syncViews() {
-	k := 0
-	for i, row := range m.rows {
-		for j := range row {
-			w := m.byName[m.names[k]]
-			m.rows[i][j] = w
-			m.order[k] = w
-			k++
-		}
-	}
 }
 
 // footerHeight is how many rows the footer occupies, including any status line.

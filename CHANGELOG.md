@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Widget API.** Adding a widget now takes noticeably less boilerplate, and the two things a
+  widget author could silently get wrong are gone.
+  - A widget's async results are addressed to it: build commands with `Base.Cmd`, `Base.Tick`
+    or `Base.Every` and the dashboard delivers the result to that widget alone. Message types
+    no longer carry an id field, and `Update` no longer filters. Two widgets of the same type
+    on one dashboard can no longer consume each other's messages.
+  - `Context.Decode` replaces `ctx.Node.Decode` and is strict: a misspelled key in a dashboard
+    is an error naming the line and the valid keys, instead of being ignored.
+  - `widget.List` supplies the cursor, the scroll window and the standard navigation keys for
+    list-shaped widgets.
+  - `Update` returns `tea.Cmd` alone; widgets are pointers and mutate in place.
+  - `widget.Register` takes a `widget.Spec` carrying a summary and an example config, and
+    refuses a type with no summary.
+- `ctos widgets` now lists each type with a one-line summary; `ctos widgets <type>` prints a
+  paste-ready configuration block.
+
 ### Added
 
 - Initial scaffold: a bubbletea dashboard that loads YAML and renders widgets in a row layout.
@@ -23,8 +41,3 @@ All notable changes to this project are documented here. The format follows
   rewrites only the `rows:` key, preserving comments, widget settings and `${VAR}` references.
 - Notes preview pane: the selected note's contents render below the list, with light markdown
   styling. Configurable via `preview` and `preview_lines`.
-
-### Changed
-
-- The clock now draws rounded line digits matching the widget frames, in three rows rather than
-  five, leaving more room for the date.

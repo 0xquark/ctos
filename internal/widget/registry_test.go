@@ -10,13 +10,13 @@ import (
 
 type stub struct{ Base }
 
-func (s *stub) Init() tea.Cmd                    { return nil }
-func (s *stub) Update(tea.Msg) (Widget, tea.Cmd) { return s, nil }
-func (s *stub) View() string                     { return "" }
-func (s *stub) Title() string                    { return "stub" }
+func (s *stub) Init() tea.Cmd          { return nil }
+func (s *stub) Update(tea.Msg) tea.Cmd { return nil }
+func (s *stub) View() string           { return "" }
+func (s *stub) Title() string          { return "stub" }
 
 func TestRegisterAndNew(t *testing.T) {
-	Register("test-stub", func(Context) (Widget, error) { return &stub{}, nil })
+	Register(Spec{Name: "test-stub", Summary: "a stub", New: func(Context) (Widget, error) { return &stub{}, nil }})
 
 	w, err := New("test-stub", Context{Name: "x"})
 	if err != nil {
@@ -30,7 +30,7 @@ func TestRegisterAndNew(t *testing.T) {
 // TestNewUnknownTypeListsOptions checks the error is actionable: a typo should
 // show the user what they could have written.
 func TestNewUnknownTypeListsOptions(t *testing.T) {
-	Register("test-listed", func(Context) (Widget, error) { return &stub{}, nil })
+	Register(Spec{Name: "test-listed", Summary: "a stub", New: func(Context) (Widget, error) { return &stub{}, nil }})
 
 	_, err := New("clokc", Context{})
 	if err == nil {
@@ -43,7 +43,7 @@ func TestNewUnknownTypeListsOptions(t *testing.T) {
 
 func TestFactoryErrorPropagates(t *testing.T) {
 	sentinel := errors.New("bad config")
-	Register("test-broken", func(Context) (Widget, error) { return nil, sentinel })
+	Register(Spec{Name: "test-broken", Summary: "a stub", New: func(Context) (Widget, error) { return nil, sentinel }})
 
 	if _, err := New("test-broken", Context{}); !errors.Is(err, sentinel) {
 		t.Errorf("got %v, want the factory's error", err)
@@ -56,8 +56,8 @@ func TestDuplicateRegistrationPanics(t *testing.T) {
 			t.Error("registering a duplicate type should panic")
 		}
 	}()
-	Register("test-dup", func(Context) (Widget, error) { return &stub{}, nil })
-	Register("test-dup", func(Context) (Widget, error) { return &stub{}, nil })
+	Register(Spec{Name: "test-dup", Summary: "a stub", New: func(Context) (Widget, error) { return &stub{}, nil }})
+	Register(Spec{Name: "test-dup", Summary: "a stub", New: func(Context) (Widget, error) { return &stub{}, nil }})
 }
 
 func TestBaseDefaults(t *testing.T) {
@@ -80,5 +80,55 @@ func TestBaseDefaults(t *testing.T) {
 	}
 	if b.Actions() != nil {
 		t.Error("Base should default to no actions")
+	}
+}
+
+// A factory's error is labelled once, by the registry, so a widget need not
+// spell out its own type and name to report a config problem.
+func TestFactoryErrorNamesTheWidget(t *testing.T) {
+	Register(Spec{Name: "test-labelled", Summary: "a stub", New: func(Context) (Widget, error) {
+		return nil, errors.New("\"path:\" is required")
+	}})
+
+	_, err := New("test-labelled", Context{Name: "inbox"})
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if got, want := err.Error(), `test-labelled "inbox": "path:" is required`; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// The registry binds a widget's name, so Base.Cmd can address messages without
+// the factory having to remember to store it.
+func TestNewBindsTheWidgetName(t *testing.T) {
+	Register(Spec{Name: "test-bound", Summary: "a stub", New: func(Context) (Widget, error) { return &stub{}, nil }})
+
+	w, err := New("test-bound", Context{Name: "left"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := w.(*stub).Name(); got != "left" {
+		t.Errorf("bound name = %q, want left", got)
+	}
+}
+
+// A widget with no summary would show up blank in `ctos widgets`, so the
+// registry refuses it rather than shipping an undocumented type.
+func TestRegisterRequiresDocumentation(t *testing.T) {
+	cases := map[string]Spec{
+		"no name":    {Summary: "a stub", New: func(Context) (Widget, error) { return &stub{}, nil }},
+		"no summary": {Name: "test-undocumented", New: func(Context) (Widget, error) { return &stub{}, nil }},
+		"no factory": {Name: "test-factoryless", Summary: "a stub"},
+	}
+	for name, spec := range cases {
+		t.Run(name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Errorf("registering a spec with %s should panic", name)
+				}
+			}()
+			Register(spec)
+		})
 	}
 }

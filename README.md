@@ -144,7 +144,8 @@ Resolved in this order:
 
 ## Widgets
 
-Run `ctos widgets` to list what your build supports.
+Run `ctos widgets` to list what your build supports, and `ctos widgets <type>` for one
+widget's keys as a block you can paste into a dashboard.
 
 ### `clock`
 

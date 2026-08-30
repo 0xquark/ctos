@@ -59,8 +59,7 @@ func run() error {
 	case "dashboards":
 		return listDashboards(dir)
 	case "widgets":
-		fmt.Println(strings.Join(widget.Types(), "\n"))
-		return nil
+		return listWidgets(flag.Arg(1))
 	default:
 		return fmt.Errorf("unknown command %q\n\nRun `ctos -h` for usage", flag.Arg(0))
 	}
@@ -74,6 +73,7 @@ Usage:
   ctos init                 write a starter config
   ctos dashboards           list available dashboards
   ctos widgets              list available widget types
+  ctos widgets <type>       show a widget's configuration
 
 Flags:
 `)
@@ -129,6 +129,35 @@ func initConfig(dir string) error {
 	}
 	if len(written) > 0 {
 		fmt.Println("\nRun `ctos` to open your dashboard.")
+	}
+	return nil
+}
+
+// listWidgets prints the widget catalogue: every type with its summary, or a
+// single type's example configuration, ready to paste under a dashboard's
+// "widgets:" key.
+func listWidgets(typeName string) error {
+	if typeName == "" {
+		var b strings.Builder
+		for _, spec := range widget.Specs() {
+			fmt.Fprintf(&b, "  %-12s %s\n", spec.Name, spec.Summary)
+		}
+		fmt.Printf("Widget types:\n\n%s\nRun `ctos widgets <type>` for one widget's configuration.\n", b.String())
+		return nil
+	}
+
+	spec, ok := widget.Lookup(typeName)
+	if !ok {
+		return fmt.Errorf("unknown widget type %q (known types: %s)", typeName, strings.Join(widget.Types(), ", "))
+	}
+
+	fmt.Printf("%s — %s\n", spec.Name, spec.Summary)
+	if spec.Example == "" {
+		return nil
+	}
+	fmt.Printf("\nIn a dashboard, under \"widgets:\":\n\n  my-%s:\n", spec.Name)
+	for _, line := range strings.Split(spec.Example, "\n") {
+		fmt.Println("    " + line)
 	}
 	return nil
 }

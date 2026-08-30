@@ -23,10 +23,13 @@ type Widget interface {
 	// Init returns an optional startup command (first fetch, first tick).
 	Init() tea.Cmd
 
-	// Update handles a message and returns the updated widget. Key messages
-	// arrive only when the widget is focused; all other messages are
-	// broadcast to every widget on the dashboard.
-	Update(msg tea.Msg) (Widget, tea.Cmd)
+	// Update handles a message and returns any follow-up command. Widgets
+	// are pointers held by the dashboard, so a widget mutates itself here
+	// rather than returning a new value.
+	//
+	// Key messages arrive only when the widget is focused. A widget's own
+	// results reach only that widget; anything else is broadcast.
+	Update(msg tea.Msg) tea.Cmd
 
 	// View renders the widget's inner content.
 	View() string
@@ -69,9 +72,14 @@ type EmbedSpec struct {
 
 // Context carries everything a Factory needs to build a widget.
 type Context struct {
-	// Name is the widget's key in the dashboard's widgets map. Widgets use
-	// it to tag their own async messages so broadcasts can be filtered.
+	// Name is the widget's key in the dashboard's widgets map. A widget
+	// embedding Base does not need to keep this: the registry binds it,
+	// and Base.Cmd addresses messages with it.
 	Name string
+
+	// Type is the registered type name, set by the registry. It appears in
+	// config errors, so a widget never has to spell its own type out.
+	Type string
 
 	// Node is the raw YAML for this widget, for decoding type-specific keys.
 	Node *yaml.Node
@@ -89,10 +97,24 @@ type Context struct {
 
 // Base supplies the boilerplate half of the Widget interface. Embed it by
 // value and override only what matters.
+//
+// Embedding Base is also what wires a widget up to addressed messages: the
+// registry hands it the widget's config name, so Base.Cmd and Base.Tick can
+// route results back to this widget alone.
 type Base struct {
 	W, H    int
+	name    string
 	focused bool
 }
+
+// bind records the widget's name in the dashboard config. The registry calls
+// it after the factory returns, so a widget author cannot forget to. It is
+// unexported deliberately: only a type embedding Base can satisfy the
+// interface the registry looks for.
+func (b *Base) bind(name string) { b.name = name }
+
+// Name is the widget's key in the dashboard's widgets map.
+func (b *Base) Name() string { return b.name }
 
 // SetSize records the inner content area assigned by the layout.
 func (b *Base) SetSize(w, h int) { b.W, b.H = w, h }

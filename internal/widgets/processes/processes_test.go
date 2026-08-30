@@ -114,8 +114,8 @@ func TestConfirmSignalsTheArmedPIDNotTheCursorRow(t *testing.T) {
 	load(p, fixture())
 
 	// Cursor sits on firefox (highest CPU), arm it.
-	if p.rows[p.cursor].PID != 200 {
-		t.Fatalf("cursor started on pid %d, want 200", p.rows[p.cursor].PID)
+	if p.rows[p.list.Cursor()].PID != 200 {
+		t.Fatalf("cursor started on pid %d, want 200", p.rows[p.list.Cursor()].PID)
 	}
 	p.Actions()[0].Run()
 
@@ -133,9 +133,9 @@ func TestConfirmSignalsTheArmedPIDNotTheCursorRow(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("confirm produced no command")
 	}
-	msg, ok := cmd().(signalledMsg)
+	msg, ok := widget.Unwrap(cmd()).(signalledMsg)
 	if !ok {
-		t.Fatalf("got %T, want signalledMsg", cmd())
+		t.Fatalf("got %T, want signalledMsg", widget.Unwrap(cmd()))
 	}
 	if msg.pid != 200 {
 		t.Fatalf("signalled pid %d, want 200 (the armed process)", msg.pid)
@@ -149,11 +149,11 @@ func TestNavigationIsFrozenWhileArmed(t *testing.T) {
 	load(p, fixture())
 	p.Actions()[0].Run()
 
-	before := p.cursor
+	before := p.list.Cursor()
 	p.Update(key("down"))
 	p.Update(key("j"))
-	if p.cursor != before {
-		t.Fatalf("cursor moved to %d while a kill was armed (was %d)", p.cursor, before)
+	if p.list.Cursor() != before {
+		t.Fatalf("cursor moved to %d while a kill was armed (was %d)", p.list.Cursor(), before)
 	}
 }
 
@@ -162,11 +162,11 @@ func TestKEscalatesToSIGKILL(t *testing.T) {
 	load(p, fixture())
 	p.Actions()[0].Run()
 
-	_, cmd := p.Update(key("k"))
+	cmd := p.Update(key("k"))
 	if cmd == nil {
 		t.Fatal("k did not send anything while armed")
 	}
-	msg := cmd().(signalledMsg)
+	msg := widget.Unwrap(cmd()).(signalledMsg)
 	if msg.sig != procs.Kill {
 		t.Errorf("signal = %v, want SIGKILL", msg.sig)
 	}
@@ -191,12 +191,12 @@ func TestCursorFollowsThePIDAcrossReSorts(t *testing.T) {
 	load(p, fixture())
 
 	p.Update(key("down")) // move off the top onto zsh (pid 300 by cpu order)
-	selected := p.rows[p.cursor].PID
+	selected := p.rows[p.list.Cursor()].PID
 
 	p.sort = procs.ByPID
 	p.rebuild()
 
-	if got := p.rows[p.cursor].PID; got != selected {
+	if got := p.rows[p.list.Cursor()].PID; got != selected {
 		t.Fatalf("after re-sorting the cursor sits on pid %d, want %d", got, selected)
 	}
 }
@@ -204,12 +204,12 @@ func TestCursorFollowsThePIDAcrossReSorts(t *testing.T) {
 func TestCursorClampsWhenTheProcessExits(t *testing.T) {
 	p := newWidget(t, 80, 12)
 	load(p, fixture())
-	p.moveTo(2) // last row
+	selectRow(p, 2) // last row
 
 	load(p, fixture()[:1]) // everything but sshd exits
 
-	if p.cursor != 0 {
-		t.Fatalf("cursor = %d, want 0 after the list shrank", p.cursor)
+	if p.list.Cursor() != 0 {
+		t.Fatalf("cursor = %d, want 0 after the list shrank", p.list.Cursor())
 	}
 	if p.View() == "" {
 		t.Fatal("view went blank after the selected process exited")
@@ -437,6 +437,13 @@ func TestGaugeScalesWithLoad(t *testing.T) {
 	}
 }
 
+// selectRow moves the cursor the way a keypress would: the widget follows the
+// PID under the cursor, not the index.
+func selectRow(p *Processes, i int) {
+	p.list.Select(i)
+	p.follow()
+}
+
 func TestCommandTextPrefersTheNameWhenNarrow(t *testing.T) {
 	p := procs.Process{Command: "/usr/lib/firefox/firefox -contentproc -childID 7"}
 	if got := commandText(p, 8); strings.Contains(got, "-childID") {
@@ -453,22 +460,8 @@ func TestCommandTextPrefersTheNameWhenNarrow(t *testing.T) {
 func TestTickIsSkippedWhileASampleIsInFlight(t *testing.T) {
 	p := newWidget(t, 80, 12)
 	p.loading = true
-	if _, cmd := p.Update(tickMsg{name: p.name}); cmd != nil {
+	if cmd := p.Update(tickMsg{}); cmd != nil {
 		t.Fatal("a tick started a second sample while one was in flight")
-	}
-}
-
-// Widgets are broadcast every message, so each must ignore other widgets'.
-func TestMessagesForOtherWidgetsAreIgnored(t *testing.T) {
-	p := newWidget(t, 80, 12)
-	load(p, fixture())
-
-	p.Update(sampledMsg{name: "someone-else", procs: nil, err: nil})
-	if len(p.rows) != len(fixture()) {
-		t.Fatal("the widget consumed another widget's sample")
-	}
-	if _, cmd := p.Update(tickMsg{name: "someone-else"}); cmd != nil {
-		t.Fatal("the widget acted on another widget's tick")
 	}
 }
 
@@ -579,14 +572,15 @@ func TestChangingSortJumpsToTheTop(t *testing.T) {
 	p := newWidget(t, 80, 20)
 	load(p, fixture())
 
-	p.moveTo(len(p.rows) - 1)
-	if p.cursor == 0 {
+	selectRow(p, len(p.rows)-1)
+	if p.list.Cursor() == 0 {
 		t.Fatal("could not move off the top")
 	}
 
 	p.Update(key("m"))
-	if p.cursor != 0 || p.offset != 0 {
-		t.Fatalf("after re-sorting cursor=%d offset=%d, want the top of the list", p.cursor, p.offset)
+	start, _ := p.list.Window(10)
+	if p.list.Cursor() != 0 || start != 0 {
+		t.Fatalf("after re-sorting cursor=%d offset=%d, want the top of the list", p.list.Cursor(), start)
 	}
 	if p.rows[0].Mem != 14.2 {
 		t.Errorf("top row has mem %v, want the largest (14.2)", p.rows[0].Mem)
@@ -718,7 +712,7 @@ func TestStaleLogResultsAreDiscarded(t *testing.T) {
 	p.detail, p.showDetail = detailLogs, true
 	p.logsLoading = true
 
-	p.Update(logsMsg{name: p.name, pid: 999, lines: []string{"from another process"}})
+	p.Update(logsMsg{pid: 999, lines: []string{"from another process"}})
 
 	if len(p.logs) != 0 {
 		t.Fatalf("kept logs for pid 999 while pid %d is selected: %v", p.selPID, p.logs)
@@ -735,7 +729,7 @@ func TestLogResultForTheSelectedProcessIsKept(t *testing.T) {
 	p.detail, p.showDetail = detailLogs, true
 	p.logsLoading = true
 
-	p.Update(logsMsg{name: p.name, pid: 200, lines: []string{"a real line"}})
+	p.Update(logsMsg{pid: 200, lines: []string{"a real line"}})
 
 	if p.logsLoading {
 		t.Error("loading flag not cleared")
@@ -752,7 +746,7 @@ func TestMovingTheCursorRefetchesLogs(t *testing.T) {
 	p.detail, p.showDetail = detailLogs, true
 	p.logsPID = p.selPID
 
-	_, cmd := p.Update(key("down"))
+	cmd := p.Update(key("down"))
 	if cmd == nil {
 		t.Fatal("moving the cursor did not re-query the log")
 	}
@@ -766,7 +760,7 @@ func TestMovingDoesNotFetchLogsWhenTheLogViewIsClosed(t *testing.T) {
 	p := newWidget(t, 80, 24)
 	load(p, fixture())
 
-	if _, cmd := p.Update(key("down")); cmd != nil {
+	if cmd := p.Update(key("down")); cmd != nil {
 		t.Fatal("moving the cursor ran a command with the log view closed")
 	}
 }
@@ -800,7 +794,7 @@ func selectPID(t *testing.T, p *Processes, pid int) {
 	t.Helper()
 	for i, r := range p.rows {
 		if r.PID == pid {
-			p.moveTo(i)
+			selectRow(p, i)
 			return
 		}
 	}

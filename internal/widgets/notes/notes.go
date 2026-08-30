@@ -22,7 +22,21 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-func init() { widget.Register("notes", New) }
+func init() {
+	widget.Register(widget.Spec{
+		Name:    "notes",
+		Summary: "markdown files in a directory, newest first, opened in your editor",
+		New:     New,
+		Example: `type: notes
+path: ~/notes             # required
+recursive: false
+extensions: [".md", ".txt"]
+limit: 200
+preview: true             # show the selected note below the list
+preview_lines: 0          # 0 splits the widget in half
+title: notes`,
+	})
+}
 
 type config struct {
 	Path       string   `yaml:"path"`
@@ -46,20 +60,17 @@ type note struct {
 
 // loadedMsg carries a directory scan back to the widget that asked for it.
 type loadedMsg struct {
-	name  string
 	notes []note
 	err   error
 }
 
 // editedMsg reports that the editor exited, so the list can be rescanned.
 type editedMsg struct {
-	name string
-	err  error
+	err error
 }
 
 // previewMsg carries a note's contents back for the preview pane.
 type previewMsg struct {
-	name  string
 	path  string
 	lines []string
 	err   error
@@ -68,14 +79,12 @@ type previewMsg struct {
 // Notes lists note files, newest first.
 type Notes struct {
 	widget.Base
-	name   string
 	cfg    config
 	theme  theme.Theme
 	editor string
 
 	notes  []note
-	cursor int
-	offset int
+	list   widget.List
 	err    error
 	loaded bool
 
@@ -94,18 +103,16 @@ func New(ctx widget.Context) (widget.Widget, error) {
 		Title:      "notes",
 		Preview:    true,
 	}
-	if ctx.Node != nil {
-		if err := ctx.Node.Decode(&cfg); err != nil {
-			return nil, fmt.Errorf("notes %q: %w", ctx.Name, err)
-		}
+	if err := ctx.Decode(&cfg); err != nil {
+		return nil, err
 	}
 	if cfg.Path == "" {
-		return nil, fmt.Errorf("notes %q: \"path:\" is required", ctx.Name)
+		return nil, errors.New("\"path:\" is required")
 	}
 	if cfg.Limit <= 0 {
 		cfg.Limit = 200
 	}
-	return &Notes{name: ctx.Name, cfg: cfg, theme: ctx.Theme, editor: ctx.Editor}, nil
+	return &Notes{cfg: cfg, theme: ctx.Theme, editor: ctx.Editor}, nil
 }
 
 // Title is the label drawn in the widget frame.
@@ -115,64 +122,46 @@ func (n *Notes) Title() string { return n.cfg.Title }
 func (n *Notes) Init() tea.Cmd { return n.scan() }
 
 // Update handles navigation keys and scan results.
-func (n *Notes) Update(msg tea.Msg) (widget.Widget, tea.Cmd) {
+func (n *Notes) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case loadedMsg:
-		if msg.name != n.name {
-			return n, nil
-		}
 		n.loaded = true
 		n.notes, n.err = msg.notes, msg.err
-		if n.cursor >= len(n.notes) {
-			n.cursor = max(0, len(n.notes)-1)
-		}
-		return n, n.syncPreview()
+		n.list.SetLen(len(n.notes))
+		return n.syncPreview()
 
 	case previewMsg:
-		if msg.name != n.name {
-			return n, nil
-		}
 		// A slower read may land after the cursor has moved on.
 		if msg.path == n.selectedPath() {
 			n.previewPath = msg.path
 			n.previewLines, n.previewErr = msg.lines, msg.err
 		}
-		return n, nil
+		return nil
 
 	case editedMsg:
-		if msg.name != n.name {
-			return n, nil
-		}
 		// The file may have been renamed, or its contents changed.
 		n.previewPath = ""
-		return n, n.scan()
+		return n.scan()
 
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "up", "k":
-			n.move(-1)
-		case "down", "j":
-			n.move(1)
-		case "home", "g":
-			n.cursor = 0
-		case "end", "G":
-			n.cursor = max(0, len(n.notes)-1)
-		case "r":
-			n.previewPath = ""
-			return n, n.scan()
+		listH, _ := n.split()
+		if n.list.HandleKey(msg, listH) {
+			return n.syncPreview()
 		}
-		n.clampScroll()
-		return n, n.syncPreview()
+		if msg.String() == "r" {
+			n.previewPath = ""
+			return n.scan()
+		}
 	}
-	return n, nil
+	return nil
 }
 
 // selectedPath is the path under the cursor, or "" when the list is empty.
 func (n *Notes) selectedPath() string {
-	if n.cursor < 0 || n.cursor >= len(n.notes) {
+	if n.list.Empty() {
 		return ""
 	}
-	return n.notes[n.cursor].path
+	return n.notes[n.list.Cursor()].path
 }
 
 // syncPreview loads the selected note when the selection has moved to a file
@@ -185,40 +174,10 @@ func (n *Notes) syncPreview() tea.Cmd {
 	if path == "" || path == n.previewPath {
 		return nil
 	}
-	name := n.name
-	return func() tea.Msg {
+	return n.Cmd(func() tea.Msg {
 		lines, err := readPreview(path)
-		return previewMsg{name: name, path: path, lines: lines, err: err}
-	}
-}
-
-func (n *Notes) move(delta int) {
-	if len(n.notes) == 0 {
-		return
-	}
-	n.cursor = min(max(n.cursor+delta, 0), len(n.notes)-1)
-}
-
-// clampScroll keeps the cursor inside the list pane.
-func (n *Notes) clampScroll() {
-	listH, _ := n.split()
-	n.clampScrollTo(listH)
-}
-
-// clampScrollTo scrolls so the cursor is visible in a pane of the given height.
-func (n *Notes) clampScrollTo(height int) {
-	if height <= 0 {
-		return
-	}
-	if n.cursor < n.offset {
-		n.offset = n.cursor
-	}
-	if n.cursor >= n.offset+height {
-		n.offset = n.cursor - height + 1
-	}
-	if n.offset < 0 {
-		n.offset = 0
-	}
+		return previewMsg{path: path, lines: lines, err: err}
+	})
 }
 
 // Actions exposes opening the selected note in the editor.
@@ -234,11 +193,10 @@ func (n *Notes) Actions() []widget.Action {
 
 // edit hands the terminal to the editor and takes it back on exit.
 func (n *Notes) edit() tea.Cmd {
-	if n.cursor >= len(n.notes) {
+	if n.list.Empty() {
 		return nil
 	}
-	path := n.notes[n.cursor].path
-	name := n.name
+	path := n.notes[n.list.Cursor()].path
 
 	// The editor command may carry flags, e.g. `code -w`.
 	fields := strings.Fields(n.editor)
@@ -248,18 +206,20 @@ func (n *Notes) edit() tea.Cmd {
 	args := append(fields[1:], path)
 
 	c := exec.Command(fields[0], args...)
+	// ExecProcess's callback is bubbletea's, not ours, so the result is
+	// addressed by hand rather than through Cmd.
 	return tea.ExecProcess(c, func(err error) tea.Msg {
-		return editedMsg{name: name, err: err}
+		return n.Address(editedMsg{err: err})
 	})
 }
 
 // scan reads the notes directory off the UI goroutine.
 func (n *Notes) scan() tea.Cmd {
-	cfg, name := n.cfg, n.name
-	return func() tea.Msg {
+	cfg := n.cfg
+	return n.Cmd(func() tea.Msg {
 		notes, err := readNotes(cfg)
-		return loadedMsg{name: name, notes: notes, err: err}
-	}
+		return loadedMsg{notes: notes, err: err}
+	})
 }
 
 func readNotes(cfg config) ([]note, error) {
@@ -413,12 +373,11 @@ func (n *Notes) listView(height int) string {
 	if height <= 0 {
 		return ""
 	}
-	n.clampScrollTo(height)
-	end := min(n.offset+height, len(n.notes))
+	start, end := n.list.Window(height)
 
 	lines := make([]string, 0, height)
-	for i := n.offset; i < end; i++ {
-		lines = append(lines, n.line(n.notes[i], i == n.cursor))
+	for i := start; i < end; i++ {
+		lines = append(lines, n.line(n.notes[i], i == n.list.Cursor()))
 	}
 	// Pad so the rule stays put as the list shrinks.
 	for len(lines) < height {
