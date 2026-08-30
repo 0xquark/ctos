@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/0xquark/ctos/internal/procs"
+	"github.com/0xquark/ctos/internal/sysinfo"
 	"github.com/0xquark/ctos/internal/theme"
 	"github.com/0xquark/ctos/internal/widget"
 	tea "github.com/charmbracelet/bubbletea"
@@ -29,7 +30,7 @@ func newWidget(t *testing.T, w, h int) *Processes {
 // load seeds the widget as if a sample had just arrived.
 func load(p *Processes, list []procs.Process) {
 	p.all = list
-	p.load = procs.Load{One: 1, Five: 1, Fifteen: 1, OK: true}
+	p.load = sysinfo.Load{One: 1, Five: 1, Fifteen: 1, OK: true}
 	p.index = procs.NewIndex(list)
 	p.rebuild()
 }

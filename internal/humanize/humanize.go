@@ -71,3 +71,84 @@ func Truncate(s string, w int) string {
 	}
 	return string(r[:w-1]) + "…"
 }
+
+// Size renders a byte count with a decimal: "16.2G", "512B".
+//
+// Bytes is the compact form, for a table column where every cell has to be
+// the same handful of characters wide. Size is for status lines and prose,
+// where "16.2G" tells the reader something that "16G" does not — and where
+// two values shown side by side, used against total, want the same precision.
+func Size(n int64) string { return scaled(float64(n), "") }
+
+// Rate renders bytes per second, e.g. "1.2M/s".
+//
+// It keeps a decimal only below ten units. Throughput is noisier than a
+// standing size, and a digit that changes every tick without changing what
+// the reader does is churn rather than precision.
+func Rate(bytesPerSec float64) string { return scaledRate(bytesPerSec) }
+
+func scaledRate(v float64) string {
+	const unit = 1024
+	exp := 0
+	for v >= unit && exp < 5 {
+		v, exp = v/unit, exp+1
+	}
+	suffix := "B/s"
+	if exp > 0 {
+		suffix = string("KMGTPE"[exp-1]) + "/s"
+	}
+	if v < 10 && exp > 0 {
+		return fmt.Sprintf("%.1f%s", v, suffix)
+	}
+	return fmt.Sprintf("%.0f%s", v, suffix)
+}
+
+// scaled divides down to the largest unit the value fills, keeping a decimal
+// for everything above bytes. Whole bytes never get one: "512.0B" is noise.
+func scaled(v float64, suffix string) string {
+	const unit = 1024
+	exp := 0
+	for v >= unit && exp < 5 {
+		v, exp = v/unit, exp+1
+	}
+	if exp == 0 {
+		return fmt.Sprintf("%.0fB%s", v, suffix)
+	}
+	return fmt.Sprintf("%.1f%c%s", v, "KMGTPE"[exp-1], suffix)
+}
+
+// Duration renders a span as its two largest non-zero units: "6d 4h",
+// "23h 49m", "12m 30s", "45s".
+//
+// RelTime's single unit is right for "how long ago", where the reader wants a
+// rough answer. An uptime or an elapsed time is read more closely than that,
+// and "6d" alone throws away most of what the reader asked for.
+func Duration(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+
+	units := []struct {
+		size time.Duration
+		name string
+	}{
+		{24 * time.Hour, "d"},
+		{time.Hour, "h"},
+		{time.Minute, "m"},
+		{time.Second, "s"},
+	}
+
+	var parts []string
+	for i, u := range units {
+		n := d / u.size
+		if n == 0 && len(parts) == 0 && i < len(units)-1 {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%d%s", n, u.name))
+		if len(parts) == 2 {
+			break
+		}
+		d -= n * u.size
+	}
+	return strings.Join(parts, " ")
+}

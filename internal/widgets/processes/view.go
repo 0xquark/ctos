@@ -8,6 +8,7 @@ import (
 
 	"github.com/0xquark/ctos/internal/humanize"
 	"github.com/0xquark/ctos/internal/procs"
+	"github.com/0xquark/ctos/internal/sysinfo"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -269,7 +270,7 @@ func (p *Processes) summaryLine() string {
 // loadStyle judges a load average against the core count: one runnable task
 // per core is fine, twice that is not.
 func (p *Processes) loadStyle(load float64) lipgloss.Style {
-	per := load / float64(procs.CPUs())
+	per := load / float64(sysinfo.CPUs())
 	switch {
 	case per >= 2:
 		return p.theme.BadStyle().Bold(true)

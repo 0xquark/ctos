@@ -216,19 +216,6 @@ func TestFilter(t *testing.T) {
 	}
 }
 
-func TestParseLoadFields(t *testing.T) {
-	l := parseLoadFields([]string{"1.50", "2.25", "3.00", "1/512", "9"})
-	if !l.OK || l.One != 1.5 || l.Five != 2.25 || l.Fifteen != 3 {
-		t.Fatalf("parseLoadFields = %+v", l)
-	}
-	if bad := parseLoadFields([]string{"1.0"}); bad.OK {
-		t.Fatal("short input should not report OK")
-	}
-	if bad := parseLoadFields([]string{"a", "b", "c"}); bad.OK {
-		t.Fatal("non-numeric input should not report OK")
-	}
-}
-
 func TestSortDirectionReverses(t *testing.T) {
 	ps := sampleProcs()
 	SortBy(ps, ByCPU, true) // ascending, against the default

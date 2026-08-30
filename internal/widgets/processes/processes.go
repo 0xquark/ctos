@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/0xquark/ctos/internal/procs"
+	"github.com/0xquark/ctos/internal/sysinfo"
 	"github.com/0xquark/ctos/internal/theme"
 	"github.com/0xquark/ctos/internal/widget"
 	tea "github.com/charmbracelet/bubbletea"
@@ -66,7 +67,7 @@ type config struct {
 
 type sampledMsg struct {
 	procs []procs.Process
-	load  procs.Load
+	load  sysinfo.Load
 	err   error
 }
 
@@ -101,7 +102,7 @@ type Processes struct {
 
 	all   []procs.Process // every process from the last sample
 	rows  []procs.Process // after user/idle/query filtering and sorting
-	load  procs.Load
+	load  sysinfo.Load
 	index *procs.Index // ancestry lookup over the last sample
 
 	sort     procs.Sort
@@ -508,6 +509,6 @@ func (p *Processes) scheduleTick() tea.Cmd {
 func (p *Processes) sample() tea.Cmd {
 	return p.Cmd(func() tea.Msg {
 		list, err := procs.Sample()
-		return sampledMsg{procs: list, load: procs.LoadAverage(), err: err}
+		return sampledMsg{procs: list, load: sysinfo.LoadAverage(), err: err}
 	})
 }

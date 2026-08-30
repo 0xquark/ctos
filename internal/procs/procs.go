@@ -1,4 +1,5 @@
-// Package procs samples the local process table and the system load.
+// Package procs samples the local process table. Machine-wide vitals — load,
+// CPU, memory, disk — live in internal/sysinfo.
 //
 // It shells out to the system `ps` rather than reading kernel structures, for
 // the same reason ctOS shells out to `ssh`: `ps` is present everywhere that

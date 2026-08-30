@@ -1,4 +1,4 @@
-package procs
+package sysinfo
 
 import (
 	"os"
@@ -15,8 +15,8 @@ type Load struct {
 }
 
 // LoadAverage reads the system load. It never returns an error: a missing
-// load average is a cosmetic loss in the widget header, not a failure worth
-// blanking the process list for.
+// load average is a cosmetic gap in a widget, not a failure worth blanking
+// the rest of a sample for.
 func LoadAverage() Load {
 	switch runtime.GOOS {
 	case "linux":

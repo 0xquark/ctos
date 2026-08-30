@@ -80,3 +80,63 @@ func TestBytes(t *testing.T) {
 		}
 	}
 }
+
+func TestRate(t *testing.T) {
+	cases := map[float64]string{
+		0:          "0B/s",
+		512:        "512B/s",
+		1024:       "1.0K/s",
+		1536:       "1.5K/s",
+		20 * 1024:  "20K/s",
+		1258291:    "1.2M/s",
+		1073741824: "1.0G/s",
+	}
+	for in, want := range cases {
+		if got := Rate(in); got != want {
+			t.Errorf("Rate(%v) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestDuration(t *testing.T) {
+	cases := map[time.Duration]string{
+		45 * time.Second:              "45s",
+		90 * time.Second:              "1m 30s",
+		23*time.Hour + 49*time.Minute: "23h 49m",
+		6*24*time.Hour + 4*time.Hour:  "6d 4h",
+		48 * time.Hour:                "2d 0h",
+		0:                             "0s",
+		-time.Second:                  "0s",
+	}
+	for in, want := range cases {
+		if got := Duration(in); got != want {
+			t.Errorf("Duration(%s) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSize(t *testing.T) {
+	cases := map[int64]string{
+		0:           "0B",
+		512:         "512B",
+		1024:        "1.0K",
+		16 << 30:    "16.0G",
+		17394617548: "16.2G",
+		24 << 30:    "24.0G",
+		3_500_000:   "3.3M",
+	}
+	for in, want := range cases {
+		if got := Size(in); got != want {
+			t.Errorf("Size(%d) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// Size and Bytes are both kept on purpose: one is for prose, one is for a
+// column where every cell has to be the same width.
+func TestSizeAndBytesDiffer(t *testing.T) {
+	const n = 17394617548
+	if Size(n) == Bytes(n) {
+		t.Errorf("Size and Bytes both render %d as %q", n, Size(n))
+	}
+}
