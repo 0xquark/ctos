@@ -87,6 +87,11 @@ type row struct {
 	spark  string
 	style  lipgloss.Style
 
+	// sparkKey and sparkTop are what "spark" was rendered from, so a pane
+	// with width going spare can draw the same history wider.
+	sparkKey string
+	sparkTop float64
+
 	// span rows put their text where the bar, value and detail would go.
 	// Throughput and uptime have no ceiling to draw a bar against, so the
 	// space is better spent on the numbers.
@@ -104,7 +109,7 @@ func (s *System) View() string {
 		return ""
 	}
 
-	if s.style == styleBar {
+	if s.resolved() == styleBar {
 		return s.barView()
 	}
 
@@ -119,12 +124,162 @@ func (s *System) View() string {
 		return s.compact(rows)
 	}
 
-	lines := make([]string, 0, len(rows))
 	l := newLayout(s.W, labelWidth(rows), s.history)
-	for _, r := range rows {
-		lines = append(lines, s.render(r, l))
+
+	// A pane wide enough for the flat row draws it and stops. The height it
+	// does not use is the frame's to leave blank: a table with its rows
+	// pushed apart is harder to read than a table, and a grid pane has
+	// width to spend, which is the trade the flat layout is built for.
+	if !s.tall(len(rows), l) {
+		lines := make([]string, 0, len(rows))
+		for _, r := range rows {
+			lines = append(lines, s.render(r, l))
+		}
+		return strings.Join(lines, "\n")
 	}
-	return strings.Join(lines, "\n")
+	return s.stacked(rows)
+}
+
+// tall reports whether the pane is the shape a status bar down the side of the
+// screen produces: too narrow for the flat row to carry its detail, and tall
+// enough to spend more than one line on a metric.
+//
+// That shape is the opposite trade from a pane in the grid — height to spend
+// and no width — so it gets the opposite layout.
+func (s *System) tall(n int, l layout) bool {
+	return l.detail == 0 && s.H >= 2*n
+}
+
+// stacked draws each metric down the pane instead of across it.
+//
+// The blocks are packed from the top at the largest size that fits, with a
+// single blank line between them. Height left over stays at the bottom in one
+// piece: a column is almost always taller than seven vitals need, and opening
+// that up as a gap between every metric pushes apart values that are read
+// together — the panel stops looking like one thing.
+func (s *System) stacked(rows []row) string {
+	// Degrade the block before the separator: the detail line is worth more
+	// than the space around it. Four lines is the fullest form, where the
+	// history gets a line of its own; below that it folds back beside the
+	// detail, then the detail goes, then the bar.
+	for _, lines := range []int{4, 3, 2, 1} {
+		for _, sep := range []int{1, 0} {
+			blocks := make([][]string, len(rows))
+			total := sep * (len(rows) - 1)
+			for i, r := range rows {
+				blocks[i] = s.block(r, lines)
+				total += len(blocks[i])
+			}
+			if total <= s.H || (lines == 1 && sep == 0) {
+				return packed(blocks, sep)
+			}
+		}
+	}
+	return ""
+}
+
+// packed joins blocks top to bottom with sep blank lines between them.
+func packed(blocks [][]string, sep int) string {
+	var out []string
+	for i, block := range blocks {
+		if i > 0 {
+			for range sep {
+				out = append(out, "")
+			}
+		}
+		out = append(out, block...)
+	}
+	return strings.Join(out, "\n")
+}
+
+// block renders one metric across up to h lines: the label with its number,
+// the bar at full width, then the history and the detail.
+//
+// Every line is cut to the pane on the way out. The pieces size themselves as
+// well, but a block is assembled from several of them and one backstop is
+// cheaper than trusting all of them at every width a column can be given.
+func (s *System) block(r row, h int) []string {
+	out := s.blockLines(r, h)
+	for i, line := range out {
+		out[i] = ansi.Truncate(line, s.W, "…")
+	}
+	return out
+}
+
+func (s *System) blockLines(r row, h int) []string {
+	lead := strings.Repeat(" ", indent)
+	inner := max(0, s.W-indent)
+	label := s.theme.DimStyle().Render(humanize.Truncate(r.label, inner))
+
+	// A span row has no magnitude to draw a bar against, so its text is the
+	// whole row. It takes the line below the label only when it will not
+	// fit beside it — which is what makes "↓ 640B/s  ↑ 738B/s" survive here
+	// where the flat row had to cut it to "↑ 738…".
+	if r.span != "" {
+		if w := lipgloss.Width(r.span); h < 2 || w+lipgloss.Width(label)+gap <= inner {
+			return []string{lead + label + strings.Repeat(" ", gap) +
+				ansi.Truncate(r.span, max(0, inner-lipgloss.Width(label)-gap), "…")}
+		}
+		return []string{
+			lead + spread(label, s.theme.FaintStyle().Render(r.spark), inner),
+			lead + ansi.Truncate(r.span, inner, "…"),
+		}
+	}
+
+	out := []string{lead + spread(label, r.style.Render(r.value), inner)}
+	if h >= 2 {
+		out = append(out, lead+s.bar(r.pct, inner, r.style))
+	}
+
+	// With four lines the history gets one of its own, at the width of the
+	// bar above it. Eight cells show a direction; a full line shows the
+	// shape of the last few minutes, which is the thing a column has the
+	// room to say and a grid row does not.
+	if h >= 4 && r.sparkKey != "" {
+		if wide := s.sparkAt(r.sparkKey, r.sparkTop, inner); strings.TrimSpace(wide) != "" {
+			out = append(out, lead+s.theme.FaintStyle().Render(wide))
+			if r.detail != "" {
+				out = append(out, lead+s.theme.FaintStyle().Render(humanize.Truncate(r.detail, inner)))
+			}
+			return out
+		}
+	}
+
+	if h >= 3 {
+		if tail := s.footnote(r, inner); tail != "" {
+			out = append(out, lead+tail)
+		}
+	}
+	return out
+}
+
+// footnote is the third line of a block: what the flat row would have put in
+// its detail column, with the history at the far end.
+//
+// The history goes on the right because a sparkline is padded from the left —
+// the newest sample is always the last cell, so a series that has not filled
+// yet grows towards the reader rather than shifting under them. Put it first
+// and every detail on the panel would start at a different column while the
+// widget warmed up.
+func (s *System) footnote(r row, w int) string {
+	detail, spark := r.detail, r.spark
+	switch {
+	case detail == "" && spark == "":
+		return ""
+	case spark == "":
+		return s.theme.FaintStyle().Render(humanize.Truncate(detail, w))
+	case detail == "":
+		return s.theme.FaintStyle().Render(spark)
+	}
+	faint := s.theme.FaintStyle()
+	return spread(faint.Render(humanize.Truncate(detail, max(0, w-sparkWidth-gap))), faint.Render(spark), w)
+}
+
+// spread puts left at one end of w cells and right at the other, keeping at
+// least one space between them.
+func spread(left, right string, w int) string {
+	n := max(1, w-lipgloss.Width(left)-lipgloss.Width(right))
+	return left + strings.Repeat(" ", n) + right
 }
 
 // labelWidth sizes the label column to the widest label actually present, so
@@ -235,7 +390,7 @@ func (s *System) compact(rows []row) string {
 // not answer for.
 func (s *System) rows() []row {
 	var out []row
-	for _, m := range s.metrics {
+	for _, m := range s.metricList() {
 		switch m {
 		case metricCPU:
 			out = append(out, s.cpuRow()...)
@@ -262,12 +417,14 @@ func (s *System) cpuRow() []row {
 		return nil
 	}
 	return []row{{
-		label:  "cpu",
-		pct:    c.Busy,
-		value:  pct(c.Busy),
-		detail: fmt.Sprintf("%.0f us · %.0f sy", c.User, c.System),
-		spark:  s.sparkline(string(metricCPU), sparkScale),
-		style:  s.level(c.Busy, 70, 90),
+		label:    "cpu",
+		pct:      c.Busy,
+		value:    pct(c.Busy),
+		detail:   fmt.Sprintf("%.0f us · %.0f sy", c.User, c.System),
+		spark:    s.sparkline(string(metricCPU), sparkScale),
+		sparkKey: string(metricCPU),
+		sparkTop: sparkScale,
+		style:    s.level(c.Busy, 70, 90),
 	}}
 }
 
@@ -277,12 +434,14 @@ func (s *System) memRow() []row {
 		return nil
 	}
 	return []row{{
-		label:  "mem",
-		pct:    m.Percent(),
-		value:  pct(m.Percent()),
-		detail: humanize.Bytes(m.Used) + "/" + humanize.Bytes(m.Total),
-		spark:  s.sparkline(string(metricMem), sparkScale),
-		style:  s.level(m.Percent(), 75, 90),
+		label:    "mem",
+		pct:      m.Percent(),
+		value:    pct(m.Percent()),
+		detail:   humanize.Bytes(m.Used) + "/" + humanize.Bytes(m.Total),
+		spark:    s.sparkline(string(metricMem), sparkScale),
+		sparkKey: string(metricMem),
+		sparkTop: sparkScale,
+		style:    s.level(m.Percent(), 75, 90),
 	}}
 }
 
@@ -354,12 +513,14 @@ func (s *System) loadRow() []row {
 	// machine at capacity, which is where the bar should read full.
 	per := l.One / float64(cores) * 100
 	return []row{{
-		label:  "load",
-		pct:    per,
-		value:  fmt.Sprintf("%.2f", l.One),
-		detail: fmt.Sprintf("%.2f %.2f · %d cores", l.Five, l.Fifteen, cores),
-		spark:  s.sparkline(string(metricLoad), sparkScale),
-		style:  s.level(per, 100, 200),
+		label:    "load",
+		pct:      per,
+		value:    fmt.Sprintf("%.2f", l.One),
+		detail:   fmt.Sprintf("%.2f %.2f · %d cores", l.Five, l.Fifteen, cores),
+		spark:    s.sparkline(string(metricLoad), sparkScale),
+		sparkKey: string(metricLoad),
+		sparkTop: sparkScale,
+		style:    s.level(per, 100, 200),
 	}}
 }
 
@@ -374,17 +535,23 @@ func (s *System) uptimeRow() []row {
 	return []row{{label: "up", span: span}}
 }
 
-// sparkline renders one metric's history, or blanks when history is off or
-// the metric has not been recorded yet.
+// sparkline renders one metric's history at the width of the flat row's
+// history column, or blanks when history is off or the metric has not been
+// recorded yet.
 func (s *System) sparkline(key string, scale float64) string {
-	if !s.history {
+	return s.sparkAt(key, scale, sparkWidth)
+}
+
+// sparkAt renders one metric's history at a given width.
+func (s *System) sparkAt(key string, scale float64, w int) string {
+	if !s.history || w <= 0 {
 		return ""
 	}
 	series, ok := s.hist[key]
 	if !ok {
 		return ""
 	}
-	return series.Render(sparkWidth, scale)
+	return series.Render(w, scale)
 }
 
 // level colours a reading against a warning and a critical threshold. It is

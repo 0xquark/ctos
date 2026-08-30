@@ -71,22 +71,22 @@ func sampleStats() sysinfo.Stats {
 }
 
 func TestDefaultsToEveryMetricAndTheRootFilesystem(t *testing.T) {
-	s, err := newSystem(t, "type: system")
+	s, err := newSystem(t, "type: system\nstyle: rows")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// The panel leaves out the two metrics that have no magnitude to draw
 	// a bar against; the strip, which is all text, takes everything.
-	if len(s.metrics) != len(rowMetrics) {
-		t.Errorf("metrics = %v, want %v", s.metrics, rowMetrics)
+	if len(s.metricList()) != len(rowMetrics) {
+		t.Errorf("metrics = %v, want %v", s.metricList(), rowMetrics)
 	}
 
 	bar, err := newSystem(t, "type: system\nstyle: bar")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(bar.metrics) != len(allMetrics) {
-		t.Errorf("bar metrics = %v, want all %v", bar.metrics, allMetrics)
+	if len(bar.metricList()) != len(allMetrics) {
+		t.Errorf("bar metrics = %v, want all %v", bar.metricList(), allMetrics)
 	}
 	if len(s.paths) != 1 || s.paths[0] != "/" {
 		t.Errorf("paths = %v, want [/]", s.paths)
@@ -611,8 +611,70 @@ func TestTopProcessIsOnlySampledWhenConfigured(t *testing.T) {
 	}
 
 	with := loaded(t, "type: system\nstyle: bar")
-	if !slices.Contains(with.metrics, metricTop) {
+	if !slices.Contains(with.metricList(), metricTop) {
 		t.Error("the bar style should include the top process by default")
+	}
+	if !with.wantsTop() {
+		t.Error("the bar style should sample the top process")
+	}
+	if without.wantsTop() {
+		t.Error("an explicit metric list without \"top\" should not sample it")
+	}
+
+	// An auto widget does not know its style until it has a box, so it
+	// samples the top process rather than leaving the value blank for a
+	// tick after the bar moves.
+	if auto := loaded(t, "type: system"); !auto.wantsTop() {
+		t.Error("an auto widget should sample the top process")
+	}
+}
+
+// "auto" is the default, and it reads the shape of the box: one line is a
+// strip, anything taller is a panel. This is what lets the same widget follow
+// the status bar from the top of the screen to the side of it.
+func TestAutoStyleFollowsTheBox(t *testing.T) {
+	s := loaded(t, "type: system")
+	if s.style != styleAuto {
+		t.Fatalf("style = %q, want the %q default", s.style, styleAuto)
+	}
+
+	s.SetSize(100, 1)
+	if got := s.resolved(); got != styleBar {
+		t.Errorf("one line tall: resolved to %q, want %q", got, styleBar)
+	}
+	if n := lipgloss.Height(s.View()); n != 1 {
+		t.Errorf("one line tall: rendered %d lines", n)
+	}
+
+	s.SetSize(24, 20)
+	if got := s.resolved(); got != styleRows {
+		t.Errorf("a column: resolved to %q, want %q", got, styleRows)
+	}
+	if n := lipgloss.Height(s.View()); n < 2 {
+		t.Errorf("a column: rendered %d lines, want the panel", n)
+	}
+
+	// An explicit style is never overridden by the box it is given.
+	fixed := loaded(t, "type: system\nstyle: bar")
+	fixed.SetSize(24, 20)
+	if got := fixed.resolved(); got != styleBar {
+		t.Errorf("explicit style resolved to %q, want %q", got, styleBar)
+	}
+}
+
+// A panel asks for as many lines as it has values, so a "rows" widget put in
+// the status bar still gets the height it needs rather than the one line the
+// bar offers first.
+func TestLinesReportsThePanelHeight(t *testing.T) {
+	s := loaded(t, "type: system\nstyle: rows\nmetrics: [cpu, mem, load]")
+	s.SetSize(80, 1)
+	if got := s.Lines(80); got != 3 {
+		t.Errorf("Lines = %d, want one per metric (3)", got)
+	}
+
+	strip := loaded(t, "type: system\nstyle: bar")
+	if got := strip.Lines(80); got != 1 {
+		t.Errorf("Lines = %d, want 1 for a strip", got)
 	}
 }
 
@@ -688,5 +750,108 @@ func TestMemBarIsExactlyTheRequestedWidth(t *testing.T) {
 	}
 	if got := s.memBar(sysinfo.Memory{}, 8); got != "" {
 		t.Errorf("an unread memory pool has no bar, got %q", got)
+	}
+}
+
+// A bar down the side of the screen hands the widget a shape a grid pane never
+// has: no width and more height than seven vitals need. The blocks are packed
+// from the top with at most one blank line between them — spreading them over
+// the whole column pushes apart values that are read together.
+func TestTallPanePacksItsBlocks(t *testing.T) {
+	s := loaded(t, "type: system\nstyle: rows")
+
+	for _, h := range []int{16, 24, 30, 49, 80} {
+		s.SetSize(24, h)
+		lines := strings.Split(s.View(), "\n")
+
+		if len(lines) > h {
+			t.Errorf("%d lines tall: rendered %d", h, len(lines))
+		}
+		if strings.TrimSpace(stripANSI(lines[0])) == "" {
+			t.Errorf("%d lines tall: the panel does not start at the top", h)
+		}
+
+		run := 0
+		for i, line := range lines {
+			if strings.TrimSpace(stripANSI(line)) != "" {
+				run = 0
+				continue
+			}
+			if run++; run > 1 {
+				t.Fatalf("%d lines tall: %d blank lines in a row at line %d", h, run, i)
+			}
+		}
+	}
+}
+
+// A column has width to spend on the history that a grid row does not, so the
+// sparkline gets a line of its own when the block has four to give.
+func TestTallPaneDrawsTheHistoryFullWidth(t *testing.T) {
+	s := loaded(t, "type: system\nstyle: rows\nmetrics: [cpu]")
+	for i := range 40 {
+		s.push(string(metricCPU), float64(10+i%50))
+	}
+	s.SetSize(28, 20)
+
+	lines := strings.Split(stripANSI(s.View()), "\n")
+	if len(lines) < 4 {
+		t.Fatalf("want a four-line block, got %d lines: %q", len(lines), lines)
+	}
+	// Line 3 is history alone, line 4 the detail the flat row would have cut.
+	if !strings.ContainsAny(lines[2], "▁▂▃▄▅▆▇█") || strings.Contains(lines[2], "us") {
+		t.Errorf("line 3 should be the history alone, got %q", lines[2])
+	}
+	if !strings.Contains(lines[3], "us ·") {
+		t.Errorf("line 4 should be the detail, got %q", lines[3])
+	}
+	if got := lipgloss.Width(lines[2]); got < 20 {
+		t.Errorf("the history is %d cells wide in a 28-cell pane", got)
+	}
+}
+
+// A stacked block is still bound by the pane it is in, at every width a bar
+// can be given.
+func TestTallPaneNeverExceedsTheWidth(t *testing.T) {
+	s := loaded(t, "type: system\nstyle: rows")
+
+	for w := 6; w <= 40; w++ {
+		s.SetSize(w, 40)
+		for i, line := range strings.Split(s.View(), "\n") {
+			if got := lipgloss.Width(line); got > w {
+				t.Fatalf("width %d: line %d is %d cells (%q)", w, i, got, stripANSI(line))
+			}
+		}
+	}
+}
+
+// The flat row is right whenever the pane is wide enough to carry it, so a
+// widget in the grid keeps the table it had.
+func TestWidePaneKeepsTheFlatRows(t *testing.T) {
+	s := loaded(t, "type: system\nstyle: rows")
+	s.SetSize(60, 20)
+
+	lines := strings.Split(s.View(), "\n")
+	if len(lines) != len(s.rows()) {
+		t.Fatalf("rendered %d lines, want one per metric (%d)", len(lines), len(s.rows()))
+	}
+	// The detail column is what a flat row has and a stacked block does not.
+	if !strings.Contains(stripANSI(lines[0]), "us ·") {
+		t.Errorf("the cpu row lost its detail: %q", stripANSI(lines[0]))
+	}
+}
+
+// Throughput and uptime have no bar, so in a stacked block their text sits
+// beside the label when it fits and below it when it does not. The flat row
+// had to cut it either way.
+func TestSpanRowsGetTheWholeWidthWhenStacked(t *testing.T) {
+	s := loaded(t, "type: system\nstyle: rows\nmetrics: [net, uptime]")
+	s.SetSize(24, 20)
+
+	out := stripANSI(s.View())
+	if !strings.Contains(out, "delorean") {
+		t.Errorf("uptime was truncated in a stacked pane:\n%s", out)
+	}
+	if strings.Contains(out, "delore…") {
+		t.Errorf("uptime should not need cutting at this width:\n%s", out)
 	}
 }

@@ -25,7 +25,7 @@ func init() {
 		Summary: "CPU, memory, disk, network and load, as bars or a status strip",
 		New:     New,
 		Example: `type: system
-style: rows               # "rows" is the panel, "bar" is the status strip
+style: auto               # "auto" follows the box; "rows" panel, "bar" strip
 refresh: 3s               # never polls faster than 1s
 metrics: [cpu, mem, swap, disk, diskio, net, load, top, uptime]
 disks: ["/"]              # one entry per mount point
@@ -79,6 +79,15 @@ var allMetrics = []metric{
 // process — since in a column of bars they would be two rows of bare text.
 var rowMetrics = []metric{metricCPU, metricMem, metricSwap, metricDisk, metricNet, metricLoad, metricUptime}
 
+// defaultMetrics is the row set for a style the dashboard did not list metrics
+// for.
+func defaultMetrics(st style) []metric {
+	if st == styleBar {
+		return allMetrics
+	}
+	return rowMetrics
+}
+
 // style selects how the widget draws itself.
 type style string
 
@@ -86,12 +95,20 @@ const (
 	// styleRows is the panel: one labelled bar per metric.
 	styleRows style = "rows"
 
-	// styleBar is the status strip: pipe-separated chips on one or two
-	// lines, dense enough to read across the top of a dashboard.
+	// styleBar is the status strip: pipe-separated chips on one line,
+	// dense enough to read across the top of a dashboard.
 	styleBar style = "bar"
+
+	// styleAuto picks between them from the shape of the box. It is the
+	// default, because the right answer is a fact about where the widget
+	// was put rather than about the widget: the same vitals belong in a
+	// strip across the top of the screen, a panel down its side, and a
+	// panel in a pane, and a dashboard should not have to restate that
+	// every time the bar moves.
+	styleAuto style = "auto"
 )
 
-var allStyles = []style{styleRows, styleBar}
+var allStyles = []style{styleRows, styleBar, styleAuto}
 
 type config struct {
 	Refresh string   `yaml:"refresh"`
@@ -161,7 +178,7 @@ func New(ctx widget.Context) (widget.Widget, error) {
 		return nil, err
 	}
 
-	metrics, err := parseMetrics(cfg.Metrics, st)
+	metrics, err := parseMetrics(cfg.Metrics)
 	if err != nil {
 		return nil, err
 	}
@@ -205,25 +222,63 @@ func deltaWindow(refresh time.Duration) int {
 
 func parseStyle(name string) (style, error) {
 	if name == "" {
-		return styleRows, nil
+		return styleAuto, nil
 	}
 	st := style(strings.ToLower(strings.TrimSpace(name)))
 	if !slices.Contains(allStyles, st) {
-		return "", fmt.Errorf("unknown style %q (valid styles: rows, bar)", name)
+		return "", fmt.Errorf("unknown style %q (valid styles: auto, rows, bar)", name)
 	}
 	return st, nil
+}
+
+// resolved is the style the widget is actually drawing in.
+//
+// One line is a strip and anything taller is a panel. That is the whole rule,
+// and it holds wherever the widget is put: the status bar offers a widget one
+// line and lets it ask for more, a bar down the side of the screen hands over
+// a whole column, and a pane in the grid is taller still.
+func (s *System) resolved() style {
+	if s.style != styleAuto {
+		return s.style
+	}
+	if s.H <= 1 {
+		return styleBar
+	}
+	return styleRows
+}
+
+// metricList is the set of values to draw: what the dashboard asked for, or
+// the default for whichever style the current box resolved to.
+func (s *System) metricList() []metric {
+	if len(s.metrics) > 0 {
+		return s.metrics
+	}
+	return defaultMetrics(s.resolved())
+}
+
+// wantsTop reports whether the busiest process may be needed, and so whether
+// the extra "ps" call is worth making.
+//
+// With an explicit metric list this is a lookup. With the default list it
+// depends on a style that is not known until the widget has a box, so an auto
+// widget samples it: one process table every few seconds costs less than a
+// value that is blank for the first tick after the bar moves.
+func (s *System) wantsTop() bool {
+	if len(s.metrics) > 0 {
+		return slices.Contains(s.metrics, metricTop)
+	}
+	return s.style != styleRows
 }
 
 // parseMetrics validates the row list. An unknown name is rejected by name
 // with the alternatives listed, the same way an unknown config key is: a
 // dashboard is hand-written, and a silently dropped row is a row the user
 // will spend a while looking for.
-func parseMetrics(names []string, st style) ([]metric, error) {
+func parseMetrics(names []string) ([]metric, error) {
+	// An empty list stays empty: which default applies depends on the
+	// resolved style, and an auto widget does not know that yet.
 	if len(names) == 0 {
-		if st == styleBar {
-			return slices.Clone(allMetrics), nil
-		}
-		return slices.Clone(rowMetrics), nil
+		return nil, nil
 	}
 
 	out := make([]metric, 0, len(names))
@@ -304,7 +359,7 @@ func (s *System) Update(msg tea.Msg) tea.Cmd {
 // sample reads the vitals off the UI goroutine.
 func (s *System) sample() tea.Cmd {
 	s.inflight = true
-	wantTop := slices.Contains(s.metrics, metricTop)
+	wantTop := s.wantsTop()
 
 	return s.Cmd(func() tea.Msg {
 		stats, err := s.sampler.Sample()

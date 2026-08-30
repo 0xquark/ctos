@@ -97,9 +97,9 @@ type Dashboard struct {
 	Name    string                `yaml:"name"`
 	Widgets map[string]WidgetSpec `yaml:"widgets"`
 
-	// Bar names widgets drawn as a frameless strip pinned above the rows.
-	// A bar widget never takes focus and is not part of the grid, so it is
-	// held separately rather than as a special row.
+	// Bar names widgets drawn as a frameless strip pinned to one edge of
+	// the screen. A bar widget never takes focus and is not part of the
+	// grid, so it is held separately rather than as a special row.
 	Bar Bar `yaml:"bar"`
 
 	// Rows lays out widget names: each inner slice is one row, and widgets
@@ -206,54 +206,190 @@ func LoadDashboard(path string) (*Dashboard, error) {
 	return d, nil
 }
 
-// Bar is the frameless strip above the rows.
+// BarPosition is the edge of the screen a bar is pinned to.
+type BarPosition string
+
+// The four edges. Top is the default because a status strip is what the bar
+// was built for, and a terminal puts its status line at the top or the bottom.
+const (
+	BarTop    BarPosition = "top"
+	BarBottom BarPosition = "bottom"
+	BarLeft   BarPosition = "left"
+	BarRight  BarPosition = "right"
+)
+
+// Vertical reports whether the bar runs down a side rather than across.
+func (p BarPosition) Vertical() bool { return p == BarLeft || p == BarRight }
+
+// barPositions is every accepted value, in the order the error message lists
+// them.
+var barPositions = []BarPosition{BarTop, BarBottom, BarLeft, BarRight}
+
+// DefaultBarWidth is how many columns a left- or right-hand bar takes when the
+// dashboard does not say. It is wide enough for the system widget's "rows"
+// panel — a label, a bar and a value — and narrow enough to be chrome.
+const DefaultBarWidth = 24
+
+// Bar is the frameless strip pinned to one edge of the dashboard.
 //
-// It takes either a plain list of widget names, which all sit on the left, or
-// a mapping with "left:" and "right:" groups. The list form is the common case
-// and stays the short one; the mapping exists because a clock or a hostname
-// belongs at the far end of a status line, where the eye expects it and where
-// it will not move as the values to its left change width.
+// It takes either a plain list of widget names, which all sit at the strip's
+// leading end, or a mapping with two groups and an optional "position:".
+//
+// The group keys follow the orientation, because "left:" means nothing on a
+// bar that runs vertically. A top or bottom bar takes "left:" and "right:"; a
+// left or right bar takes "top:" and "bottom:". Both spellings land in Start
+// and End: Start is the leading end, End the trailing one.
+//
+// Two groups exist because a clock or a hostname belongs at the far end of a
+// status line, where the eye expects it and where it will not move as the
+// values before it change size.
 type Bar struct {
-	Left  []string `yaml:"left"`
-	Right []string `yaml:"right"`
+	// Position is the edge the bar is pinned to. Empty means top.
+	Position BarPosition
+
+	// Width is how many columns a vertical bar takes. Zero means
+	// DefaultBarWidth. It is meaningless on a horizontal bar, whose width
+	// is the terminal's and whose height comes from its contents.
+	Width int
+
+	// Start is the leading group: the left of a horizontal bar, the top of
+	// a vertical one. End is the trailing group.
+	Start, End []string
 }
 
-// UnmarshalYAML accepts both spellings.
+// Horizontal reports whether the bar runs across the screen.
+func (b Bar) Horizontal() bool { return !b.Position.Vertical() }
+
+// groupKeys is the pair of group names this orientation accepts, leading first.
+func (p BarPosition) groupKeys() (start, end string) {
+	if p.Vertical() {
+		return "top", "bottom"
+	}
+	return "left", "right"
+}
+
+// UnmarshalYAML accepts the list form and the mapping form.
+//
+// "position:" is read before the groups are validated, so the key it governs
+// may be written either side of it — a file is not obliged to put position
+// first just because the parser walks the mapping in order.
 func (b *Bar) UnmarshalYAML(node *yaml.Node) error {
 	switch node.Kind {
 	case yaml.SequenceNode:
-		return node.Decode(&b.Left)
+		b.Position = BarTop
+		return node.Decode(&b.Start)
 
 	case yaml.MappingNode:
-		for i := 0; i+1 < len(node.Content); i += 2 {
-			switch key := node.Content[i].Value; key {
-			case "left", "right":
-			default:
-				return fmt.Errorf("line %d: unknown key %q under \"bar:\" (valid keys: left, right)",
-					node.Content[i].Line, key)
-			}
-		}
-		// The alias avoids recursing back into this method.
-		type barFields Bar
-		var f barFields
-		if err := node.Decode(&f); err != nil {
+		if err := b.decodePosition(node); err != nil {
 			return err
 		}
-		*b = Bar(f)
-		return nil
+		return b.decodeGroups(node)
 
 	default:
-		return fmt.Errorf("line %d: \"bar:\" takes a list of widget names, or \"left:\" and \"right:\" lists", node.Line)
+		return fmt.Errorf("line %d: \"bar:\" takes a list of widget names, or a mapping with \"position:\" and two groups", node.Line)
 	}
 }
 
-// Names is every widget in the bar, left group first.
+// decodePosition reads "position:" out of the mapping, leaving the default in
+// place when it is absent.
+func (b *Bar) decodePosition(node *yaml.Node) error {
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value != "position" {
+			continue
+		}
+		val := node.Content[i+1]
+		var s string
+		if err := val.Decode(&s); err != nil {
+			return fmt.Errorf("line %d: \"position:\" must be one of %s", val.Line, joinPositions())
+		}
+		if !slices.Contains(barPositions, BarPosition(s)) {
+			return fmt.Errorf("line %d: unknown bar position %q (valid: %s)", val.Line, s, joinPositions())
+		}
+		b.Position = BarPosition(s)
+	}
+	if b.Position == "" {
+		b.Position = BarTop
+	}
+	return nil
+}
+
+// decodeGroups reads the two group lists and the width, rejecting any key that
+// does not belong on a bar of this orientation.
+func (b *Bar) decodeGroups(node *yaml.Node) error {
+	startKey, endKey := b.Position.groupKeys()
+
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		key, val := node.Content[i].Value, node.Content[i+1]
+
+		switch key {
+		case "position":
+			continue
+
+		case "width":
+			if b.Horizontal() {
+				return fmt.Errorf("line %d: \"width:\" applies only to a \"left\" or \"right\" bar; a %s bar is as wide as the terminal",
+					val.Line, b.Position)
+			}
+			if err := val.Decode(&b.Width); err != nil || b.Width < 1 {
+				return fmt.Errorf("line %d: \"width:\" must be a positive number of columns", val.Line)
+			}
+
+		case startKey:
+			if err := val.Decode(&b.Start); err != nil {
+				return err
+			}
+
+		case endKey:
+			if err := val.Decode(&b.End); err != nil {
+				return err
+			}
+
+		default:
+			// Naming the orientation is the useful half of this
+			// error: the key is almost always the other pair,
+			// written from habit rather than in ignorance.
+			return fmt.Errorf("line %d: unknown key %q under \"bar:\"; a %s bar takes %q and %q%s",
+				node.Content[i].Line, key, b.Position, startKey, endKey, widthHint(b.Position))
+		}
+	}
+	return nil
+}
+
+// widthHint mentions "width:" only where it applies.
+func widthHint(p BarPosition) string {
+	if p.Vertical() {
+		return ", plus \"width:\" and \"position:\""
+	}
+	return ", plus \"position:\""
+}
+
+func joinPositions() string {
+	out := make([]string, len(barPositions))
+	for i, p := range barPositions {
+		out[i] = string(p)
+	}
+	return strings.Join(out, ", ")
+}
+
+// Names is every widget in the bar, leading group first.
 func (b Bar) Names() []string {
-	return append(slices.Clone(b.Left), b.Right...)
+	return append(slices.Clone(b.Start), b.End...)
 }
 
 // Empty reports whether the dashboard has no status bar.
-func (b Bar) Empty() bool { return len(b.Left)+len(b.Right) == 0 }
+func (b Bar) Empty() bool { return len(b.Start)+len(b.End) == 0 }
+
+// Columns is the width a vertical bar takes. It is zero for a horizontal bar,
+// which does not take width away from the grid at all.
+func (b Bar) Columns() int {
+	if b.Empty() || b.Horizontal() {
+		return 0
+	}
+	if b.Width > 0 {
+		return b.Width
+	}
+	return DefaultBarWidth
+}
 
 // validate checks that rows and widgets agree with each other.
 func (d *Dashboard) validate() error {

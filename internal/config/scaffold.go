@@ -57,8 +57,9 @@ widgets:
 
   vitals:
     type: system
-    # "bar" is the status strip; "rows" is the panel of labelled bars.
-    style: bar
+    # "auto" reads the box: a strip when it is one line tall, the panel of
+    # labelled bars when it is taller. Set "bar" or "rows" to pin one.
+    style: auto
     refresh: 3s
     # One row per mount point.
     disks: ["/"]
@@ -86,9 +87,12 @@ widgets:
     # How far back the log view looks.
     log_window: 5m
 
-# Widgets drawn as a frameless strip above the rows: vitals on the left, the
-# clock on the right. The strip is chrome, not a pane: no border, no focus,
-# one line. 
+# Widgets drawn as a frameless strip on one edge: vitals on the left, the clock
+# on the right. The strip is chrome, not a pane: no border, no focus, one line.
+#
+# Press ctrl+l then "b" to move it round the four edges, "s" to keep it. In YAML
+# that is "position:": top (the default), bottom, left or right. A vertical bar
+# names its groups "top:" and "bottom:" instead, and takes a "width:" in columns.
 bar:
   left: [vitals]
   right: [clock]

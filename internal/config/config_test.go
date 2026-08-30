@@ -447,8 +447,11 @@ rows:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(d.Bar.Left) != 1 || d.Bar.Left[0] != "vitals" {
-		t.Errorf("Bar.Left = %v, want [vitals]", d.Bar.Left)
+	if len(d.Bar.Start) != 1 || d.Bar.Start[0] != "vitals" {
+		t.Errorf("Bar.Start = %v, want [vitals]", d.Bar.Start)
+	}
+	if d.Bar.Position != BarTop {
+		t.Errorf("Bar.Position = %q, want the %q default", d.Bar.Position, BarTop)
 	}
 	if len(d.Rows) != 1 || d.Rows[0][0] != "notes" {
 		t.Errorf("Rows = %v, want [[notes]]", d.Rows)
@@ -539,15 +542,95 @@ rows:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(d.Bar.Left) != 1 || d.Bar.Left[0] != "vitals" {
-		t.Errorf("Bar.Left = %v", d.Bar.Left)
+	if len(d.Bar.Start) != 1 || d.Bar.Start[0] != "vitals" {
+		t.Errorf("Bar.Start = %v", d.Bar.Start)
 	}
-	if len(d.Bar.Right) != 1 || d.Bar.Right[0] != "clock" {
-		t.Errorf("Bar.Right = %v", d.Bar.Right)
+	if len(d.Bar.End) != 1 || d.Bar.End[0] != "clock" {
+		t.Errorf("Bar.End = %v", d.Bar.End)
 	}
 	// Both groups are validated and both count as placing a widget.
 	if want := []string{"vitals", "clock"}; len(d.Bar.Names()) != 2 || d.Bar.Names()[1] != want[1] {
 		t.Errorf("Names = %v, want %v", d.Bar.Names(), want)
+	}
+}
+
+// A bar down one side names its groups after the ends it actually has, and
+// takes a width, because a column's width is a choice where a strip's is the
+// terminal's.
+func TestLoadDashboardBarVertical(t *testing.T) {
+	path := write(t, t.TempDir(), "d.yaml", `
+name: home
+widgets:
+  vitals:
+    type: system
+  clock:
+    type: clock
+  notes:
+    type: notes
+bar:
+  position: right
+  width: 30
+  top: [vitals]
+  bottom: [clock]
+rows:
+  - [notes]
+`)
+	d, err := LoadDashboard(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Bar.Position != BarRight {
+		t.Errorf("Position = %q, want %q", d.Bar.Position, BarRight)
+	}
+	if d.Bar.Horizontal() {
+		t.Error("a right bar should not report itself horizontal")
+	}
+	if got := d.Bar.Columns(); got != 30 {
+		t.Errorf("Columns = %d, want the configured 30", got)
+	}
+	if len(d.Bar.Start) != 1 || d.Bar.Start[0] != "vitals" {
+		t.Errorf("Start = %v, want [vitals]", d.Bar.Start)
+	}
+	if len(d.Bar.End) != 1 || d.Bar.End[0] != "clock" {
+		t.Errorf("End = %v, want [clock]", d.Bar.End)
+	}
+}
+
+// "position:" governs which group keys are legal, so it has to be read before
+// them — including when the file writes it last.
+func TestLoadDashboardBarPositionMayComeLast(t *testing.T) {
+	path := write(t, t.TempDir(), "d.yaml", `
+name: d
+widgets:
+  a:
+    type: clock
+  b:
+    type: notes
+bar:
+  top: [a]
+  position: left
+rows:
+  - [b]
+`)
+	d, err := LoadDashboard(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Bar.Position != BarLeft || len(d.Bar.Start) != 1 {
+		t.Errorf("Position = %q, Start = %v", d.Bar.Position, d.Bar.Start)
+	}
+}
+
+// A vertical bar with no width falls back to a column wide enough for the
+// system widget's panel.
+func TestBarWidthDefaults(t *testing.T) {
+	b := Bar{Position: BarLeft, Start: []string{"a"}}
+	if got := b.Columns(); got != DefaultBarWidth {
+		t.Errorf("Columns = %d, want %d", got, DefaultBarWidth)
+	}
+	// A horizontal bar takes no columns from the grid at all.
+	if got := (Bar{Start: []string{"a"}}).Columns(); got != 0 {
+		t.Errorf("a top bar took %d columns, want 0", got)
 	}
 }
 
@@ -571,6 +654,34 @@ func TestLoadDashboardBarGroupErrors(t *testing.T) {
 			"in the bar twice",
 			"name: d\nwidgets:\n  a:\n    type: clock\n  b:\n    type: clock\nbar:\n  left: [a]\n  right: [a]\nrows:\n  - [b]\n",
 			"more than once",
+		},
+		{
+			"unknown position",
+			"name: d\nwidgets:\n  a:\n    type: clock\nbar:\n  position: sideways\n  left: [a]\nrows:\n  - [a]\n",
+			`unknown bar position "sideways"`,
+		},
+		{
+			// The pair that does not match the orientation is the
+			// mistake people actually make, so the error names the
+			// pair that does.
+			"horizontal keys on a vertical bar",
+			"name: d\nwidgets:\n  a:\n    type: clock\n  b:\n    type: clock\nbar:\n  position: left\n  left: [a]\nrows:\n  - [b]\n",
+			`a left bar takes "top" and "bottom"`,
+		},
+		{
+			"vertical keys on a horizontal bar",
+			"name: d\nwidgets:\n  a:\n    type: clock\n  b:\n    type: clock\nbar:\n  top: [a]\nrows:\n  - [b]\n",
+			`a top bar takes "left" and "right"`,
+		},
+		{
+			"width on a horizontal bar",
+			"name: d\nwidgets:\n  a:\n    type: clock\n  b:\n    type: clock\nbar:\n  width: 20\n  left: [a]\nrows:\n  - [b]\n",
+			`applies only to a "left" or "right" bar`,
+		},
+		{
+			"width is not a number",
+			"name: d\nwidgets:\n  a:\n    type: clock\n  b:\n    type: clock\nbar:\n  position: right\n  width: wide\n  top: [a]\nrows:\n  - [b]\n",
+			"positive number of columns",
 		},
 	}
 	for _, tc := range tests {

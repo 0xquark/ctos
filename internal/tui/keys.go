@@ -88,15 +88,19 @@ func pad(s string, w int) string {
 }
 
 // layoutFooter renders the key hints for layout mode.
-func layoutFooter(t theme.Theme, moving string, dirty bool) string {
+func layoutFooter(t theme.Theme, moving string, dirty, hasBar bool) string {
 	entries := []helpEntry{
 		{"←→", "reorder"},
 		{"↑↓", "row"},
 		{"↵", "new row"},
 		{"tab", "pick widget"},
-		{"s", "save"},
-		{"esc", "cancel"},
 	}
+	// The bar key is only advertised on a dashboard that has a bar, so the
+	// footer never offers a binding that will not do anything.
+	if hasBar {
+		entries = append(entries, helpEntry{"b", "move bar"})
+	}
+	entries = append(entries, helpEntry{"s", "save"}, helpEntry{"esc", "cancel"})
 
 	parts := make([]string, len(entries))
 	for i, e := range entries {

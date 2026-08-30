@@ -62,7 +62,7 @@ Edit them and restart.
 | `↑` `↓` (or `k` `j`) | navigate inside the focused widget |
 | `enter` | the focused widget's primary action |
 | `r` | refresh the focused widget |
-| `ctrl+l` | rearrange the layout |
+| `ctrl+l` | rearrange the layout (`b` moves the status bar) |
 | `?` | toggle full help |
 | `q` | quit |
 
@@ -101,15 +101,84 @@ of the width, since it is a trailing detail rather than the point of the bar.
  CPU 13.0% │ MEM █████▒▒░ 66% 15.9G/24.0G │ SWP 45% 1.3G/3.0G │ / 67% 8.4G free │ LOAD 3.12 2.92 2.61        Sun 30 Aug  15:57:18
 ```
 
-The bar is chrome, not a pane. It has no border and no title, `tab` never lands on it, and
-`ctrl+l` cannot move it — a widget with no cursor and no actions is not somewhere focus should
-be able to get stuck. It is as tall as its contents need, up to three lines, and the rows below
-give back exactly that much: on a terminal too short for both, the dashboard keeps a row and the
-bar is the thing that shrinks. `system` in `style: bar` always asks for exactly one.
+The bar is chrome, not a pane. It has no border and no title, `tab` never lands on it, and the
+arrows in layout mode cannot push a widget into it — a widget with no cursor and no actions is
+not somewhere focus should be able to get stuck. It is as tall as its contents need, up to three
+lines, and the rows below give back exactly that much: on a terminal too short for both, the
+dashboard keeps a row and the bar is the thing that shrinks. A strip asks for exactly one line.
 
 Any widget type can go there. `system` with `style: bar` is what the left-hand side is for, and
 the `clock` collapses to a single line of text when it is one line tall — which is where a
 terminal expects the time to be, and a great deal less of the screen than a pane of block digits.
+
+#### Putting the bar somewhere else
+
+In ctOS, press `ctrl+l` for layout mode and then `b` to move the bar round the four edges;
+`s` saves it back to the dashboard file, `esc` puts it back. In YAML it is `position:` — `top`
+(the default), `bottom`, `left` or `right`:
+
+```yaml
+bar:
+  position: right
+  width: 30
+  top: [vitals]
+  bottom: [clock]
+```
+
+The group keys follow the orientation, because "left" means nothing on a bar that runs
+vertically. A `top` or `bottom` bar takes `left:` and `right:`; a `left` or `right` bar takes
+`top:` and `bottom:`. Either way the second group is the trailing one, pinned to the far end and
+measured first.
+
+`width:` belongs only to a vertical bar, and defaults to 24 columns. A strip's height is its
+content's to choose — a line of vitals either fits or it does not — but a column's width is not:
+it is how much of the screen you are willing to spend on chrome. It is clamped down when the
+terminal is too narrow to carry both, and below eight columns the bar disappears rather than
+starve the grid, the same promise the horizontal bar makes about keeping one row.
+
+`system` follows the bar on its own: its default `style: auto` draws the strip when it is one
+line tall and the panel of labelled bars when it is taller, so the same widget reads correctly
+across the top of the screen and down the side of it. `style: bar` or `style: rows` pins one.
+
+In a column the panel changes shape too. A side bar is the opposite trade from a grid pane — no
+width, and more height than seven vitals need — so each metric is drawn *down* the pane rather
+than across it:
+
+```
+╭─ notes ──────────────────╮
+│ welcome.md               │  cpu                    22%
+│ ideas.md                 │  ██████░░░░░░░░░░░░░░░░░░░░
+│                          │  ▃▃▃▃▄▄▄▄▄▄▄▂▂▂▂▂▃▃▃▃▃▃▃▃▃▃
+│                          │  17 us · 5 sy
+│                          │
+│                          │  mem                    67%
+│                          │  █████████████████░░░░░░░░░
+│                          │  ▆▅▅▅▅▅▅▅▅▆▆▆▆▆▆▆▅▅▅▅▅▅▅▅▆▆
+│                          │  16G/24G
+│                          │
+│                          │  net ↓ 26K/s  ↑ 48K/s
+│                          │
+│                          │  load                  4.62
+│                          │  ██████████░░░░░░░░░░░░░░░░
+│                          │  ▄▄▅▄▄▃▄▄▅▅▄▄▃▃▄▄▅▅▄▄▃▃▄▄▅
+│                          │  3.76 3.33 · 12 cores
+╰──────────────────────────╯  Sun 30 Aug  16:40:08
+ tab focus  ·  ↑↓ move  ·  ? help  ·  q quit
+```
+
+The bar takes the block's full width, the history gets a line of its own — eight cells show a
+direction, a full line shows the shape of the last few minutes — and the values with no bar to
+draw, throughput and uptime, sit beside their label. All three are things the flat row had to cut
+for want of width.
+
+Blocks are packed from the top with one blank line between them, and the height a column has left
+over stays at the bottom in one piece. Spreading it out as a gap between every metric pushes apart
+values that are read together, and the panel stops looking like one thing. If the space bothers
+you, a bar group takes more than one widget — `top: [vitals, processes]` splits the column between
+them — or give the bar a shorter dashboard to sit beside.
+
+Widgets in a vertical group stack where widgets in a strip sit side by side, and the footer is
+never an edge the bar can take: it is the shell's own line and stays below everything.
 
 ### Rearranging the layout
 
@@ -209,9 +278,13 @@ The machine at a glance, in one of two styles. `style: rows` is a panel — one 
 vital, with a sparkline behind the ones that move. `style: bar` is a status strip: pipe-separated
 values across the width of the terminal, meant for the dashboard's [status bar](#status-bar).
 
+The default, `style: auto`, picks from the shape of the box: one line is a strip, anything
+taller is a panel. Which one is right is a fact about where the widget was put rather than about
+the widget, so a dashboard does not have to restate it every time the bar moves edge.
+
 | Key | Default | Meaning |
 |---|---|---|
-| `style` | `rows` | `rows` for the panel, `bar` for the status strip |
+| `style` | `auto` | `auto` to follow the box, `rows` for the panel, `bar` for the status strip |
 | `refresh` | `3s` | poll interval, minimum `1s` |
 | `metrics` | see below | what to show, in order: `cpu`, `mem`, `swap`, `disk`, `diskio`, `net`, `load`, `top`, `uptime` |
 | `disks` | `["/"]` | one entry per mount point; `[]` for none |
@@ -221,7 +294,7 @@ values across the width of the terminal, meant for the dashboard's [status bar](
 
 `metrics` defaults to everything in the `bar` style. In the `rows` style it leaves out `diskio`
 and `top`, which have no magnitude to draw a bar against and would be two rows of bare text in a
-column of bars.
+column of bars. Under `auto` the default follows whichever style the box resolved to.
 
 ```
  cpu  ▁▂▃▄▄▃▂▂ ████░░░░░░░░░░░░   22% 17 us · 5 sy

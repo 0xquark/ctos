@@ -79,13 +79,19 @@ func (s *System) barView() string {
 	return " " + fitOneLine(chips, sep, max(0, s.W-indent))
 }
 
-// Lines is the widget.Liner contract. The strip is one line by definition, so
-// there is nothing to measure.
+// Lines is the widget.Liner contract: how tall this widget's content wants to
+// be. A strip is one line by definition; a panel is one line per value it has
+// been asked to draw.
+//
+// The panel's answer matters because the status bar offers a widget one line
+// and grows to what it asks for. A widget explicitly set to "rows" and put in
+// a top bar therefore gets the rows it needs, up to the bar's ceiling, rather
+// than the single line it was offered.
 func (s *System) Lines(int) int {
-	if s.style != styleBar {
-		return s.H
+	if s.resolved() == styleBar {
+		return 1
 	}
-	return 1
+	return len(s.metricList())
 }
 
 // fitOneLine renders as much of chips as fits in w cells on a single line.
@@ -193,7 +199,7 @@ func widestIn(chips []chip, level []int, alive []bool, tier int, shrinkable bool
 // chips builds the strip's contents, one or more per configured metric.
 func (s *System) chips() []chip {
 	var out []chip
-	for _, m := range s.metrics {
+	for _, m := range s.metricList() {
 		switch m {
 		case metricCPU:
 			out = append(out, s.cpuChips()...)

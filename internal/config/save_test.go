@@ -48,7 +48,7 @@ func TestSaveRowsPreservesEverythingElse(t *testing.T) {
 	}
 
 	newRows := [][]string{{"hackernews"}, {"notes", "clock"}}
-	if err := SaveRows(path, newRows); err != nil {
+	if err := SaveLayout(path, newRows, Bar{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -95,7 +95,7 @@ func TestSaveRowsUsesFlowStyle(t *testing.T) {
 	if err := os.WriteFile(path, []byte(annotatedDashboard), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveRows(path, [][]string{{"clock", "notes"}, {"hackernews"}}); err != nil {
+	if err := SaveLayout(path, [][]string{{"clock", "notes"}, {"hackernews"}}, Bar{}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(path)
@@ -116,7 +116,7 @@ func TestSaveRowsAddsMissingKey(t *testing.T) {
 	}
 
 	want := [][]string{{"clock", "notes"}}
-	if err := SaveRows(path, want); err != nil {
+	if err := SaveLayout(path, want, Bar{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -134,7 +134,7 @@ func TestSaveRowsKeepsFileMode(t *testing.T) {
 	if err := os.WriteFile(path, []byte(annotatedDashboard), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := SaveRows(path, [][]string{{"clock"}, {"notes"}, {"hackernews"}}); err != nil {
+	if err := SaveLayout(path, [][]string{{"clock"}, {"notes"}, {"hackernews"}}, Bar{}); err != nil {
 		t.Fatal(err)
 	}
 	fi, err := os.Stat(path)
@@ -148,7 +148,7 @@ func TestSaveRowsKeepsFileMode(t *testing.T) {
 
 func TestSaveRowsErrors(t *testing.T) {
 	t.Run("missing file", func(t *testing.T) {
-		err := SaveRows(filepath.Join(t.TempDir(), "nope.yaml"), [][]string{{"a"}})
+		err := SaveLayout(filepath.Join(t.TempDir(), "nope.yaml"), [][]string{{"a"}}, Bar{})
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -159,7 +159,7 @@ func TestSaveRowsErrors(t *testing.T) {
 		if err := os.WriteFile(path, []byte("- just\n- a list\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := SaveRows(path, [][]string{{"a"}}); err == nil {
+		if err := SaveLayout(path, [][]string{{"a"}}, Bar{}); err == nil {
 			t.Fatal("expected an error for a non-dashboard file")
 		}
 	})
@@ -173,7 +173,7 @@ func TestSaveRowsLeavesNoTempFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 3; i++ {
-		if err := SaveRows(path, [][]string{{"clock"}, {"notes", "hackernews"}}); err != nil {
+		if err := SaveLayout(path, [][]string{{"clock"}, {"notes", "hackernews"}}, Bar{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -190,9 +190,9 @@ func TestSaveRowsLeavesNoTempFiles(t *testing.T) {
 	}
 }
 
-// Layout mode rewrites "rows:" only. Everything else in the file, the status
-// bar included, has to come through untouched.
-func TestSaveRowsKeepsTheBar(t *testing.T) {
+// An empty Bar means the caller has nothing to say about it, so the file's own
+// bar — and everything else in the file — has to come through untouched.
+func TestSaveKeepsTheBarItWasNotGiven(t *testing.T) {
 	path := write(t, t.TempDir(), "d.yaml", `# my dashboard
 name: home
 widgets:
@@ -209,7 +209,7 @@ bar: [vitals]
 rows:
   - [notes]
 `)
-	if err := SaveRows(path, [][]string{{"notes"}}); err != nil {
+	if err := SaveLayout(path, [][]string{{"notes"}}, Bar{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -221,5 +221,78 @@ rows:
 		if !strings.Contains(string(out), want) {
 			t.Errorf("save dropped %q:\n%s", want, out)
 		}
+	}
+}
+
+// Moving the bar in layout mode has to survive the save, which means writing
+// "position:" and the group keys that position actually takes.
+func TestSaveRewritesTheBar(t *testing.T) {
+	src := `# my dashboard
+name: home
+widgets:
+  vitals:
+    type: system
+  clock:
+    type: clock
+  notes:
+    type: notes
+    path: ${HOME}/notes
+
+# the strip
+bar:
+  left: [vitals]
+  right: [clock]
+
+rows:
+  - [notes]
+`
+	path := write(t, t.TempDir(), "d.yaml", src)
+
+	moved := Bar{Position: BarLeft, Width: 30, Start: []string{"vitals"}, End: []string{"clock"}}
+	if err := SaveLayout(path, [][]string{{"notes"}}, moved); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"position: left", "width: 30", "top: [vitals]", "bottom: [clock]"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("save is missing %q:\n%s", want, out)
+		}
+	}
+	// The horizontal spellings must be gone, or the file will not load.
+	if strings.Contains(string(out), "left: [vitals]") {
+		t.Errorf("save kept the horizontal group keys:\n%s", out)
+	}
+	// Comments and unexpanded values survive, as they do for rows.
+	for _, want := range []string{"# my dashboard", "# the strip", "${HOME}/notes"} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("save dropped %q:\n%s", want, out)
+		}
+	}
+
+	// And what was written is what loads back.
+	d, err := LoadDashboard(path)
+	if err != nil {
+		t.Fatalf("the saved file does not load: %v", err)
+	}
+	if d.Bar.Position != BarLeft || d.Bar.Columns() != 30 {
+		t.Errorf("reloaded bar = %+v", d.Bar)
+	}
+}
+
+// A plain top bar stays a plain top bar: a save should not expand the short
+// form into a mapping just to state the default position.
+func TestSaveKeepsTheShortBarForm(t *testing.T) {
+	path := write(t, t.TempDir(), "d.yaml", "name: d\nwidgets:\n  a:\n    type: clock\n  b:\n    type: notes\nbar: [a]\nrows:\n  - [b]\n")
+
+	if err := SaveLayout(path, [][]string{{"b"}}, Bar{Position: BarTop, Start: []string{"a"}}); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := os.ReadFile(path)
+	if !strings.Contains(string(out), "bar: [a]") {
+		t.Errorf("short form was expanded:\n%s", out)
 	}
 }
