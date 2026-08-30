@@ -401,10 +401,10 @@ func (t *Tasks) cycleShow() {
 // Actions names what enter does. While an operation is armed it answers the
 // prompt, so the confirming key is the same one everything else uses.
 func (t *Tasks) Actions() []widget.Action {
-	switch {
-	case t.arm == armedDelete:
+	switch t.arm {
+	case armedDelete:
 		return []widget.Action{{Name: "delete", Run: t.confirm}}
-	case t.arm == armedClear:
+	case armedClear:
 		return []widget.Action{{Name: "clear completed", Run: t.confirm}}
 	}
 
