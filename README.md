@@ -223,14 +223,17 @@ widgets:
   notes:
     type: notes
     path: ~/notes
+  tasks:
+    type: tasks
+    path: ~/notes/tasks.md
   hackernews:
     type: hackernews
     limit: 20
     refresh: 5m
 
 rows:
-  - [clock, notes]
-  - [hackernews]
+  - [tasks, notes]
+  - [clock, hackernews]
 ```
 
 Widgets are named under `widgets:`, then arranged by `rows:`. Widgets sharing a row split the
@@ -412,6 +415,85 @@ Lists files newest-first. `enter` opens the selected file in your editor.
 The preview applies light markdown styling such as headings, bullets, quotes and code fences  and
 refuses to print binary files. It disappears automatically when the widget is under 8 rows
 tall.
+
+### `tasks`
+
+A checklist you can work from the dashboard: `a` adds a task, `enter` ticks it off, `t` makes it
+due today. The store is a plain markdown file of `- [ ]` lines, so the same list opens in any
+editor, greps, diffs, and syncs with whatever already syncs your notes.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `path` | `~/notes/tasks.md` | the markdown file the tasks live in |
+| `show` | `all` | `all`, `open`, or `today` |
+| `group` | `true` | headings by when things are due |
+| `refresh` | `60s` | re-read the file, minimum `5s` |
+| `limit` | `200` | maximum tasks shown |
+
+The file is created on the first task you add, along with its directory.
+
+```
+ ⚠ 2 overdue · ◷ 2 today · 8 open · 2 done
+ OVERDUE ─────────────────────────────────────
+▸ ☐ renew the passport                  6d ago
+  ☐ pay the electricity bill         yesterday
+ TODAY ───────────────────────────────────────
+  ☐ stand-up notes for the team          today
+  ☐ book the dentist                     today
+ UPCOMING ────────────────────────────────────
+  ☐ reply to the landlord                  Tue
+ SOMEDAY ─────────────────────────────────────
+  ☐ read the bubbletea internals
+```
+
+| Key | Does |
+|---|---|
+| `enter` / `space` | tick the task off, or reopen it |
+| `a` | add a task |
+| `e` | edit the selected task, date included |
+| `t` | due today, or clear the date if it is already today |
+| `d` `d` | delete the selected task |
+| `x` `x` | clear every completed task |
+| `f` | cycle the view: all → open → today |
+| `o` | open the file in your editor |
+| `r` | re-read the file now |
+
+`d` and `x` throw work away, so each asks before it acts: the first press arms it, the second
+carries it out, and `esc` cancels.
+
+#### Dates
+
+A due date is a `due:` token in the line, written back as an ISO date so it sorts and greps:
+
+```markdown
+- [ ] renew the passport due:2026-09-04
+- [x] ship the tasks widget
+```
+
+Typing a task takes shorthands and resolves them on the way in — `due:today`, `due:tomorrow`,
+`due:fri`, `due:+3d`, `due:09-04`, `due:2026-09-04`. A weekday means the *next* one, never
+today. A shorthand that means nothing is left in the text rather than swallowed, so you get your
+words back instead of a task that quietly lost half of itself. Obsidian's `📅 2026-09-04` is
+read too, and normalised on the next write.
+
+`show: today` is the list that answers "what am I doing today": overdue and due-today, and
+nothing else. The summary line still counts the whole file, so a filtered view never hides how
+much is outstanding.
+
+#### Sharing the file with an editor
+
+Everything that is not a checkbox — headings, prose, blank lines — is carried through untouched,
+so the list can live inside a note you already keep. Every write re-reads the file first and
+finds the task by its own text, so a checklist open in `$EDITOR` at the same time is not
+reverted by a keystroke here; a task that has since been deleted elsewhere says so rather than
+acting on whatever moved into its place.
+
+Given one line — in the [status bar](#status-bar), or a pane one row tall — it collapses to a
+strip: what is late, what is due, and the next thing to do.
+
+```
+ ⚠ 2 late · ◷ 2 today · 8 open · ▸ renew the passport
+```
 
 ### `git`
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const defaultConfigYAML = `# ctOS global settings.
@@ -34,6 +35,16 @@ const defaultDashboardYAML = `# The default ctOS dashboard.
 name: home
 
 widgets:
+  tasks:
+    type: tasks
+    # A plain markdown checklist. Edit it here or in any editor.
+    path: ~/notes/tasks.md
+    # all, open, or today. Press "f" in ctOS to cycle them.
+    show: all
+    # Group the list under overdue / today / upcoming headings.
+    group: true
+    refresh: 60s
+
   notes:
     type: notes
     # Point this at your own notes directory.
@@ -98,7 +109,7 @@ bar:
   right: [clock]
 
 rows:
-  - [notes]
+  - [tasks, notes]
   - [processes, hackernews]
 `
 
@@ -130,8 +141,13 @@ func Scaffold(dir string) (written, skipped []string, err error) {
 	return written, skipped, nil
 }
 
-// EnsureNotesDir creates the sample notes directory with a starter note, so a
-// fresh install has something to show in the notes widget.
+// EnsureNotesDir creates the sample notes directory with a starter note and a
+// starter checklist, so a fresh install has something to show in the notes and
+// tasks widgets.
+//
+// A directory that already exists is left entirely alone: it is the user's
+// notes, not ours to add files to. The tasks widget writes its own file on the
+// first task, so nothing is lost by not seeding one there.
 func EnsureNotesDir(dir string) error {
 	if _, err := os.Stat(dir); err == nil {
 		return nil
@@ -140,10 +156,8 @@ func EnsureNotesDir(dir string) error {
 		return err
 	}
 	welcome := filepath.Join(dir, "welcome.md")
-	if _, err := os.Stat(welcome); err == nil {
-		return nil
-	}
-	return os.WriteFile(welcome, []byte(`# Welcome to ctOS
+	if _, err := os.Stat(welcome); err != nil {
+		note := []byte(`# Welcome to ctOS
 
 This note exists so the notes widget has something to show.
 
@@ -151,5 +165,31 @@ This note exists so the notes widget has something to show.
 - Press enter on a note to open it in your editor.
 - Point the widget somewhere real by editing "path:" in
   dashboards/home.yaml.
+`)
+		if err := os.WriteFile(welcome, note, 0o644); err != nil {
+			return err
+		}
+	}
+
+	// The tasks widget writes this file itself, but a starter list means a
+	// fresh install shows a working checklist rather than an empty pane.
+	tasks := filepath.Join(dir, "tasks.md")
+	if _, err := os.Stat(tasks); err == nil {
+		return nil
+	}
+	return os.WriteFile(tasks, []byte(`# Tasks
+
+Plain markdown checkboxes. ctOS reads and writes this file; so can you.
+A date is a "due:" token, written back as an ISO date.
+
+- [ ] press "a" in the tasks widget to add one of your own
+- [ ] press "t" to make a task due today due:`+today()+`
+- [x] read this far
 `), 0o644)
+}
+
+// today is written into the starter checklist so the "overdue" and "today"
+// groups have something in them on the first run.
+func today() string {
+	return time.Now().Format("2006-01-02")
 }

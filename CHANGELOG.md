@@ -8,6 +8,17 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **`tasks` widget.** A checklist you can work from the dashboard: `a` adds a task, `enter` or
+  `space` ticks it off, `e` edits it, `t` makes it due today or clears the date, `f` cycles the
+  view between `all`, `open` and `today`, and `o` opens the file in your editor. `d` deletes and
+  `x` clears the completed tasks, each armed by the first press and carried out by the second.
+  Due dates are a `due:` token written back as an ISO date; the input box takes `due:today`,
+  `due:fri`, `due:+3d` and `due:2026-09-04` and resolves them as you type. The store is a plain
+  markdown file of `- [ ]` lines — `~/notes/tasks.md` by default, created on the first task —
+  so the same list opens in any editor, and everything in the file that is not a checkbox is
+  carried through untouched. Every write re-reads the file first and finds the task by its own
+  text, so a checklist open in `$EDITOR` at the same time is not reverted. At one line tall it
+  renders a strip of what is late, what is due and the next thing to do, for the status bar.
 - **`git` widget.** The state of a set of local repositories — branch, distance from upstream,
   uncommitted work, and how long ago anyone touched them — with a detail panel beside the list
   showing the selected repository's changed files and recent commits. `enter` moves the cursor
@@ -30,7 +41,7 @@ All notable changes to this project are documented here. The format follows
   `top:`/`bottom:` down. In layout mode, `b` cycles the four edges and `s` saves it. A vertical
   bar takes a `width:`, defaulting to 24 columns.
 - The starter dashboard now opens with a vitals strip and the clock in the status bar, and
-  `notes`, `processes` and `hackernews` in the grid.
+  `tasks`, `notes`, `processes` and `hackernews` in the grid, plus a starter `~/notes/tasks.md`.
 - Initial scaffold: a bubbletea dashboard that loads YAML and renders widgets in a row layout.
 - Config: `config.yaml` for global settings, `dashboards/*.yaml` for dashboards. Resolution via
   `--config-dir`, `$CTOS_CONFIG_DIR`, `--home-config`, `$XDG_CONFIG_HOME`, `~/.config/ctos`,

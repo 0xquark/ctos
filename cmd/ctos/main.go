@@ -21,6 +21,7 @@ import (
 	_ "github.com/0xquark/ctos/internal/widgets/notes"
 	_ "github.com/0xquark/ctos/internal/widgets/processes"
 	_ "github.com/0xquark/ctos/internal/widgets/system"
+	_ "github.com/0xquark/ctos/internal/widgets/tasks"
 )
 
 // version is overridden at release time with -ldflags.

@@ -42,7 +42,7 @@ func TestScaffoldedDashboardBuildsAndRenders(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
 	out := m.View()
-	for _, want := range []string{"notes", "processes", "hacker news"} {
+	for _, want := range []string{"tasks", "notes", "processes", "hacker news"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the rendered starter dashboard is missing %q", want)
 		}
