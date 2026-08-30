@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/0xquark/ctos/internal/repos"
-	"github.com/0xquark/ctos/internal/theme"
 	"github.com/0xquark/ctos/internal/widget"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -139,7 +138,6 @@ type tickMsg struct{}
 // Git lists repositories and their state.
 type Git struct {
 	widget.Base
-	theme theme.Theme
 
 	paths   []string // explicit repos; empty when scanning
 	scan    string
@@ -234,7 +232,6 @@ func New(ctx widget.Context) (widget.Widget, error) {
 	}
 
 	return &Git{
-		theme:      ctx.Theme,
 		paths:      slices.Clone(cfg.Repos),
 		scan:       cfg.Scan,
 		depth:      cfg.Depth,

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/0xquark/ctos/internal/humanize"
-	"github.com/0xquark/ctos/internal/theme"
 	"github.com/0xquark/ctos/internal/widget"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -76,7 +75,6 @@ type refreshMsg struct{}
 type HackerNews struct {
 	widget.Base
 	cfg     config
-	theme   theme.Theme
 	refresh time.Duration
 
 	stories []story
@@ -102,7 +100,7 @@ func New(ctx widget.Context) (widget.Widget, error) {
 		return nil, err
 	}
 
-	return &HackerNews{cfg: cfg, theme: ctx.Theme, refresh: refresh}, nil
+	return &HackerNews{cfg: cfg, refresh: refresh}, nil
 }
 
 // Init starts the first fetch.
@@ -257,11 +255,11 @@ func decodeStories(r io.Reader) ([]story, error) {
 func (h *HackerNews) View() string {
 	switch {
 	case h.err != nil && len(h.stories) == 0:
-		return h.theme.BadStyle().Render("⚠ " + h.err.Error())
+		return h.Theme().BadStyle().Render("⚠ " + h.err.Error())
 	case h.loading && len(h.stories) == 0:
-		return h.theme.DimStyle().Render("loading hacker news…")
+		return h.Theme().DimStyle().Render("loading hacker news…")
 	case len(h.stories) == 0:
-		return h.theme.DimStyle().Render("no stories")
+		return h.Theme().DimStyle().Render("no stories")
 	}
 
 	var b strings.Builder
@@ -295,12 +293,12 @@ func (h *HackerNews) titleLine(s story, index int, selected bool) string {
 	rank := fmt.Sprintf("%2d ", index+1)
 
 	marker := "  "
-	titleStyle := h.theme.TextStyle()
+	titleStyle := h.Theme().TextStyle()
 	if selected {
 		marker = "▸ "
-		titleStyle = h.theme.AccentStyle().Bold(true)
+		titleStyle = h.Theme().AccentStyle().Bold(true)
 		if !h.Focused() {
-			titleStyle = h.theme.TextStyle().Bold(true)
+			titleStyle = h.Theme().TextStyle().Bold(true)
 		}
 	}
 
@@ -309,8 +307,8 @@ func (h *HackerNews) titleLine(s story, index int, selected bool) string {
 	if width < 1 {
 		return humanize.Truncate(s.Title, h.W)
 	}
-	return h.theme.FaintStyle().Render(rank) +
-		h.theme.FaintStyle().Render(marker) +
+	return h.Theme().FaintStyle().Render(rank) +
+		h.Theme().FaintStyle().Render(marker) +
 		titleStyle.Render(humanize.Truncate(s.Title, width))
 }
 
@@ -320,20 +318,20 @@ func (h *HackerNews) metaLine(s story) string {
 	parts := []string{h.scoreStyle(s.Points).Render(strconv.Itoa(s.Points) + " pts")}
 
 	if s.Comments > 0 {
-		parts = append(parts, h.theme.DimStyle().Render(strconv.Itoa(s.Comments)+" comments"))
+		parts = append(parts, h.Theme().DimStyle().Render(strconv.Itoa(s.Comments)+" comments"))
 	}
 	if d := humanize.Domain(s.URL); d != "" {
-		parts = append(parts, h.theme.DimStyle().Render(d))
+		parts = append(parts, h.Theme().DimStyle().Render(d))
 	}
 	if !s.Created.IsZero() {
-		parts = append(parts, h.theme.FaintStyle().Render(humanize.RelTime(s.Created)))
+		parts = append(parts, h.Theme().FaintStyle().Render(humanize.RelTime(s.Created)))
 	}
 
 	indent := "     "
-	line := indent + strings.Join(parts, h.theme.FaintStyle().Render(" · "))
+	line := indent + strings.Join(parts, h.Theme().FaintStyle().Render(" · "))
 	if lipgloss.Width(line) > h.W {
 		// Drop the domain first; it is the least useful field.
-		line = indent + strings.Join(parts[:min(2, len(parts))], h.theme.FaintStyle().Render(" · "))
+		line = indent + strings.Join(parts[:min(2, len(parts))], h.Theme().FaintStyle().Render(" · "))
 	}
 	return line
 }
@@ -341,10 +339,10 @@ func (h *HackerNews) metaLine(s story) string {
 func (h *HackerNews) scoreStyle(points int) lipgloss.Style {
 	switch {
 	case points >= 300:
-		return h.theme.AccentStyle().Bold(true)
+		return h.Theme().AccentStyle().Bold(true)
 	case points >= 100:
-		return h.theme.WarnStyle()
+		return h.Theme().WarnStyle()
 	default:
-		return h.theme.DimStyle()
+		return h.Theme().DimStyle()
 	}
 }

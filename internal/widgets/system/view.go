@@ -102,9 +102,9 @@ type row struct {
 func (s *System) View() string {
 	switch {
 	case s.err != nil:
-		return s.theme.BadStyle().Render("⚠ " + s.err.Error())
+		return s.Theme().BadStyle().Render("⚠ " + s.err.Error())
 	case s.loading:
-		return s.theme.DimStyle().Render("reading system statistics…")
+		return s.Theme().DimStyle().Render("reading system statistics…")
 	case s.H <= 0 || s.W <= 0:
 		return ""
 	}
@@ -209,7 +209,7 @@ func (s *System) block(r row, h int) []string {
 func (s *System) blockLines(r row, h int) []string {
 	lead := strings.Repeat(" ", indent)
 	inner := max(0, s.W-indent)
-	label := s.theme.DimStyle().Render(humanize.Truncate(r.label, inner))
+	label := s.Theme().DimStyle().Render(humanize.Truncate(r.label, inner))
 
 	// A span row has no magnitude to draw a bar against, so its text is the
 	// whole row. It takes the line below the label only when it will not
@@ -221,7 +221,7 @@ func (s *System) blockLines(r row, h int) []string {
 				ansi.Truncate(r.span, max(0, inner-lipgloss.Width(label)-gap), "…")}
 		}
 		return []string{
-			lead + spread(label, s.theme.FaintStyle().Render(r.spark), inner),
+			lead + spread(label, s.Theme().FaintStyle().Render(r.spark), inner),
 			lead + ansi.Truncate(r.span, inner, "…"),
 		}
 	}
@@ -237,9 +237,9 @@ func (s *System) blockLines(r row, h int) []string {
 	// room to say and a grid row does not.
 	if h >= 4 && r.sparkKey != "" {
 		if wide := s.sparkAt(r.sparkKey, r.sparkTop, inner); strings.TrimSpace(wide) != "" {
-			out = append(out, lead+s.theme.FaintStyle().Render(wide))
+			out = append(out, lead+s.Theme().FaintStyle().Render(wide))
 			if r.detail != "" {
-				out = append(out, lead+s.theme.FaintStyle().Render(humanize.Truncate(r.detail, inner)))
+				out = append(out, lead+s.Theme().FaintStyle().Render(humanize.Truncate(r.detail, inner)))
 			}
 			return out
 		}
@@ -267,11 +267,11 @@ func (s *System) footnote(r row, w int) string {
 	case detail == "" && spark == "":
 		return ""
 	case spark == "":
-		return s.theme.FaintStyle().Render(humanize.Truncate(detail, w))
+		return s.Theme().FaintStyle().Render(humanize.Truncate(detail, w))
 	case detail == "":
-		return s.theme.FaintStyle().Render(spark)
+		return s.Theme().FaintStyle().Render(spark)
 	}
-	faint := s.theme.FaintStyle()
+	faint := s.Theme().FaintStyle()
 	return spread(faint.Render(humanize.Truncate(detail, max(0, w-sparkWidth-gap))), faint.Render(spark), w)
 }
 
@@ -296,11 +296,11 @@ func labelWidth(rows []row) int {
 func (s *System) render(r row, l layout) string {
 	var b strings.Builder
 	b.WriteString(strings.Repeat(" ", indent))
-	b.WriteString(s.theme.DimStyle().Render(pad(humanize.Truncate(r.label, l.label), l.label)))
+	b.WriteString(s.Theme().DimStyle().Render(pad(humanize.Truncate(r.label, l.label), l.label)))
 
 	if l.spark > 0 {
 		b.WriteString(strings.Repeat(" ", gap))
-		b.WriteString(s.theme.FaintStyle().Render(pad(r.spark, l.spark)))
+		b.WriteString(s.Theme().FaintStyle().Render(pad(r.spark, l.spark)))
 	}
 
 	// A span row gets the bar, value and detail columns as one field.
@@ -329,7 +329,7 @@ func (s *System) render(r row, l layout) string {
 
 	if l.detail > 0 && r.detail != "" {
 		b.WriteString(strings.Repeat(" ", gap))
-		b.WriteString(s.theme.FaintStyle().Render(humanize.Truncate(r.detail, l.detail)))
+		b.WriteString(s.Theme().FaintStyle().Render(humanize.Truncate(r.detail, l.detail)))
 	}
 	return b.String()
 }
@@ -347,7 +347,7 @@ func (s *System) bar(pct float64, w int, style lipgloss.Style) string {
 		filled = 1
 	}
 	return style.Render(strings.Repeat(string(barFull), filled)) +
-		s.theme.FaintStyle().Render(strings.Repeat(string(barEmpty), w-filled))
+		s.Theme().FaintStyle().Render(strings.Repeat(string(barEmpty), w-filled))
 }
 
 // compact packs the rows onto fewer lines than there are metrics, for a pane
@@ -362,7 +362,7 @@ func (s *System) compact(rows []row) string {
 		chips = append(chips, text)
 	}
 
-	sep := s.theme.FaintStyle().Render(" · ")
+	sep := s.Theme().FaintStyle().Render(" · ")
 	var lines []string
 	line := ""
 	for _, chip := range chips {
@@ -453,7 +453,7 @@ func (s *System) swapRow() []row {
 	// Swap that is switched off is a row worth keeping: its absence is
 	// what explains the machine's behaviour under pressure.
 	if w.Total == 0 {
-		return []row{{label: "swap", pct: 0, value: "off", style: s.theme.DimStyle()}}
+		return []row{{label: "swap", pct: 0, value: "off", style: s.Theme().DimStyle()}}
 	}
 	// Any swap in use at all is worth noticing, so the thresholds sit
 	// lower than memory's: paging is a symptom before it is a problem.
@@ -489,12 +489,12 @@ func (s *System) netRow() []row {
 		// Throughput is a difference between two samples, so the first
 		// tick has nothing to show yet. Saying so beats a blank row
 		// that looks like an interface with no traffic.
-		return []row{{label: "net", span: s.theme.FaintStyle().Render("…")}}
+		return []row{{label: "net", span: s.Theme().FaintStyle().Render("…")}}
 	}
 
-	down := s.theme.TextStyle().Render(humanize.Rate(n.Rx))
-	up := s.theme.TextStyle().Render(humanize.Rate(n.Tx))
-	arrows := s.theme.DimStyle()
+	down := s.Theme().TextStyle().Render(humanize.Rate(n.Rx))
+	up := s.Theme().TextStyle().Render(humanize.Rate(n.Tx))
+	arrows := s.Theme().DimStyle()
 	return []row{{
 		label: "net",
 		spark: s.sparkline(netRxKey, 0),
@@ -528,9 +528,9 @@ func (s *System) uptimeRow() []row {
 	if s.stats.Uptime <= 0 {
 		return nil
 	}
-	span := s.theme.TextStyle().Render(humanize.Duration(s.stats.Uptime))
+	span := s.Theme().TextStyle().Render(humanize.Duration(s.stats.Uptime))
 	if s.stats.Host != "" {
-		span += s.theme.FaintStyle().Render(" · " + s.stats.Host)
+		span += s.Theme().FaintStyle().Render(" · " + s.stats.Host)
 	}
 	return []row{{label: "up", span: span}}
 }
@@ -560,11 +560,11 @@ func (s *System) sparkAt(key string, scale float64, w int) string {
 func (s *System) level(v, warn, bad float64) lipgloss.Style {
 	switch {
 	case v >= bad:
-		return s.theme.BadStyle().Bold(true)
+		return s.Theme().BadStyle().Bold(true)
 	case v >= warn:
-		return s.theme.WarnStyle()
+		return s.Theme().WarnStyle()
 	default:
-		return s.theme.GoodStyle()
+		return s.Theme().GoodStyle()
 	}
 }
 

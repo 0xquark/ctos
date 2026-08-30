@@ -52,7 +52,8 @@ func TestScaffoldedDashboardBuildsAndRenders(t *testing.T) {
 	// grid, so neither has a frame title to look for. What the bar must not
 	// be is missing: it is the first line, drawn without a border.
 	first, _, _ := strings.Cut(out, "\n")
-	if strings.ContainsAny(first, "╭╮") {
+	corners := theme.New("").Chrome
+	if strings.ContainsAny(first, corners.TopLeft+corners.TopRight) {
 		t.Errorf("the first line should be the frameless status bar, got %q", first)
 	}
 	if strings.TrimSpace(first) == "" {

@@ -72,12 +72,20 @@ type Model struct {
 	layoutMode    bool
 	beforeEdit    [][]string
 	barBeforeEdit config.Bar
-	status        string
+
+	// status is a transient line under the dashboard. statusKey is the key
+	// that may be pressed again without dismissing it, so cycling themes
+	// does not clear the name it is reporting; any other key does.
+	status    string
+	statusKey string
 }
 
 // New builds every widget on the dashboard and returns the root model.
 func New(cfg *config.Config, dash *config.Dashboard) (*Model, error) {
-	th := theme.New(cfg.Theme.Accent)
+	th, err := theme.Resolve(cfg.Theme.Name, cfg.Theme.Accent)
+	if err != nil {
+		return nil, fmt.Errorf("%s: theme: %w", config.SettingsFile(cfg.Dir), err)
+	}
 
 	m := &Model{
 		cfg:    cfg,
@@ -194,6 +202,12 @@ func (m *Model) update(msg tea.Msg) tea.Cmd {
 		if m.layoutMode {
 			return m.layoutKey(msg)
 		}
+		// A status line has been read by the time the next key is
+		// pressed, and it costs the dashboard a row until it goes.
+		if m.status != "" && msg.String() != m.statusKey {
+			m.status, m.statusKey = "", ""
+			m.resize()
+		}
 		// A widget typing a filter query owns the whole keyboard; otherwise
 		// "q" would quit mid-word. ctrl+c still gets out.
 		if widget.Grabbing(m.focused()) {
@@ -233,6 +247,10 @@ func (m *Model) globalKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		m.enterLayoutMode()
 		return nil, true
 
+	case "ctrl+t":
+		m.cycleTheme()
+		return nil, true
+
 	case "?":
 		m.showHelp = !m.showHelp
 		m.resize()
@@ -255,6 +273,63 @@ func (m *Model) globalKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		return nil, true
 	}
 	return nil, false
+}
+
+// cycleTheme moves to the next palette and writes it back to config.yaml.
+//
+// Unlike the layout, a theme has one value, is wholly visible the instant it
+// changes, and is undone by pressing the key again — so there is nothing for a
+// confirm step to protect, and a switch that did not persist would leave the
+// user editing YAML anyway, which is what the key exists to avoid.
+//
+// The repaint is not conditional on the save. A read-only config directory is
+// a reason to say so in the status line, not a reason to refuse to change
+// colour for the rest of the session.
+func (m *Model) cycleTheme() {
+	names := theme.Cycle()
+	at := max(0, slices.Index(names, m.theme.Name))
+	next := names[(at+1)%len(names)]
+
+	// No accent override: asking for a theme asks for its whole look, and
+	// carrying the last one's accent across is what makes every palette
+	// come out the same colour. The key is dropped from config.yaml too.
+	th, err := theme.Resolve(next, "")
+	if err != nil {
+		// Unreachable: the name came out of theme.Names().
+		m.setStatus(err.Error())
+		return
+	}
+	m.applyTheme(th)
+
+	m.cfg.Theme.Name, m.cfg.Theme.Accent = next, ""
+	if err := config.SaveTheme(config.SettingsFile(m.cfg.Dir), next); err != nil {
+		m.setStatus(fmt.Sprintf("theme: %s — not saved: %v", next, err))
+		return
+	}
+	// The position is worth a few cells once the list is long enough that
+	// you cannot tell how far round it you are.
+	m.setStatus(fmt.Sprintf("theme: %s · %d/%d", next, (at+1)%len(names)+1, len(names)))
+}
+
+// setStatus reports the theme change, and marks ctrl+t as the key that may be
+// pressed again without dismissing it: cycling past three palettes to find the
+// one you want should not blank the label naming them.
+func (m *Model) setStatus(text string) {
+	m.status, m.statusKey = text, "ctrl+t"
+	m.resize()
+}
+
+// applyTheme repaints the shell and every widget, including the ones in the
+// bar. Widgets render through widget.Base.Theme, so none is rebuilt and none
+// loses its scroll position, filter or loaded data.
+func (m *Model) applyTheme(th theme.Theme) {
+	m.theme = th
+	for _, w := range m.byName {
+		widget.Retheme(w, th)
+	}
+	// Chrome may have changed the frame runes, not the frame size, but a
+	// resize is what re-renders the bar's height against the new palette.
+	m.resize()
 }
 
 // enterLayoutMode snapshots the layout so the edit can be cancelled.

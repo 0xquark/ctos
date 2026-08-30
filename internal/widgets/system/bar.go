@@ -75,7 +75,7 @@ func (s *System) barView() string {
 	if len(chips) == 0 {
 		return ""
 	}
-	sep := s.theme.FaintStyle().Render(" │ ")
+	sep := s.Theme().FaintStyle().Render(" │ ")
 	return " " + fitOneLine(chips, sep, max(0, s.W-indent))
 }
 
@@ -231,13 +231,13 @@ func (s *System) chips() []chip {
 // text; making the headline number the only bright thing in each group is what
 // lets the eye cross the whole bar in one pass and stop only where it should.
 func (s *System) text(label, primary string, st lipgloss.Style, rest ...string) string {
-	out := s.theme.DimStyle().Render(label)
+	out := s.Theme().DimStyle().Render(label)
 	if primary != "" {
 		out += " " + st.Render(primary)
 	}
 	for _, r := range rest {
 		if r != "" {
-			out += " " + s.theme.FaintStyle().Render(r)
+			out += " " + s.Theme().FaintStyle().Render(r)
 		}
 	}
 	return out
@@ -281,13 +281,13 @@ func (s *System) memChips() []chip {
 
 	// The bar sits between the label and the percentage, so the eye reads
 	// the shape of memory and then the number that summarises it.
-	withBar := s.theme.DimStyle().Render("MEM") + " " + bar + " " + st.Render(pct)
+	withBar := s.Theme().DimStyle().Render("MEM") + " " + bar + " " + st.Render(pct)
 
 	out := []chip{{
 		prio: prioMem,
 		forms: []string{
-			withBar + " " + s.theme.FaintStyle().Render(size) + spaced(d),
-			withBar + " " + s.theme.FaintStyle().Render(size),
+			withBar + " " + s.Theme().FaintStyle().Render(size) + spaced(d),
+			withBar + " " + s.Theme().FaintStyle().Render(size),
 			withBar,
 			s.text("MEM", pct, st),
 		},
@@ -339,7 +339,7 @@ func memParts(m sysinfo.Memory) []memPart {
 func (s *System) renderParts(parts []memPart, sep string, size func(int64) string) string {
 	fields := make([]string, 0, len(parts))
 	for _, p := range parts {
-		fields = append(fields, s.theme.DimStyle().Render(p.label)+" "+s.theme.TextStyle().Render(size(p.bytes)))
+		fields = append(fields, s.Theme().DimStyle().Render(p.label)+" "+s.Theme().TextStyle().Render(size(p.bytes)))
 	}
 	return strings.Join(fields, sep)
 }
@@ -362,11 +362,11 @@ func (s *System) memBar(m sysinfo.Memory, w int) string {
 		glyph string
 		style lipgloss.Style
 	}{
-		{m.Wired, "█", s.theme.BadStyle()},
-		{m.Compressed, "█", s.theme.WarnStyle()},
-		{max(0, m.Used-m.Wired-m.Compressed), "█", s.theme.AccentStyle()},
-		{cached, "▒", s.theme.DimStyle()},
-		{max(0, m.Total-m.Used-cached), "░", s.theme.FaintStyle()},
+		{m.Wired, "█", s.Theme().BadStyle()},
+		{m.Compressed, "█", s.Theme().WarnStyle()},
+		{max(0, m.Used-m.Wired-m.Compressed), "█", s.Theme().AccentStyle()},
+		{cached, "▒", s.Theme().DimStyle()},
+		{max(0, m.Total-m.Used-cached), "░", s.Theme().FaintStyle()},
 	}
 
 	// Boundaries are rounded cumulatively rather than per segment, so the
@@ -395,7 +395,7 @@ func (s *System) swapChips() []chip {
 		return nil
 	}
 	if w.Total == 0 {
-		return []chip{{prio: prioSwap, forms: []string{s.text("SWP", "off", s.theme.DimStyle())}}}
+		return []chip{{prio: prioSwap, forms: []string{s.text("SWP", "off", s.Theme().DimStyle())}}}
 	}
 
 	st := s.level(w.Percent(), 50, 80)
@@ -432,10 +432,10 @@ func (s *System) diskChips() []chip {
 func (s *System) diskIOChips() []chip {
 	io := s.stats.DiskIO
 	if !io.OK {
-		return []chip{{prio: prioDiskIO, forms: []string{s.text("DISK", "…", s.theme.FaintStyle())}}}
+		return []chip{{prio: prioDiskIO, forms: []string{s.text("DISK", "…", s.Theme().FaintStyle())}}}
 	}
 
-	st := s.theme.TextStyle()
+	st := s.Theme().TextStyle()
 	// macOS reports one combined figure, so claiming a direction it does
 	// not know would be a lie the reader cannot see through.
 	if !io.Split {
@@ -456,9 +456,9 @@ func (s *System) diskIOChips() []chip {
 func (s *System) netChips() []chip {
 	n := s.stats.Net
 	if !n.OK {
-		return []chip{{prio: prioNet, forms: []string{s.text("NET", "…", s.theme.FaintStyle())}}}
+		return []chip{{prio: prioNet, forms: []string{s.text("NET", "…", s.Theme().FaintStyle())}}}
 	}
-	st := s.theme.TextStyle()
+	st := s.Theme().TextStyle()
 	return []chip{{
 		prio: prioNet,
 		forms: []string{
@@ -512,8 +512,8 @@ func (s *System) topChips() []chip {
 		{
 			prio: prioTopMem,
 			forms: []string{
-				s.text("TOP MEM", name(s.top.mem, 18), s.theme.TextStyle(), humanize.Size(s.top.mem.RSS)),
-				s.text("TOP MEM", name(s.top.mem, 12), s.theme.TextStyle(), humanize.Bytes(s.top.mem.RSS)),
+				s.text("TOP MEM", name(s.top.mem, 18), s.Theme().TextStyle(), humanize.Size(s.top.mem.RSS)),
+				s.text("TOP MEM", name(s.top.mem, 12), s.Theme().TextStyle(), humanize.Bytes(s.top.mem.RSS)),
 			},
 		},
 	}
@@ -528,8 +528,8 @@ func (s *System) uptimeChips() []chip {
 	return []chip{{
 		prio: prioUptime,
 		forms: []string{
-			s.text("UP", full, s.theme.TextStyle()),
-			s.text("UP", short, s.theme.TextStyle()),
+			s.text("UP", full, s.Theme().TextStyle()),
+			s.text("UP", short, s.Theme().TextStyle()),
 		},
 	}}
 }
@@ -552,9 +552,9 @@ func (s *System) deltaText(key string, floor float64, format string, scale ...fl
 		d *= scale[0]
 	}
 
-	arrow, st := "▲", s.theme.WarnStyle()
+	arrow, st := "▲", s.Theme().WarnStyle()
 	if d < 0 {
-		arrow, st = "▼", s.theme.GoodStyle()
+		arrow, st = "▼", s.Theme().GoodStyle()
 		d = -d
 	}
 	// The space is not decoration: these arrows are East Asian Ambiguous, so

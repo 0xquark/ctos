@@ -11,7 +11,6 @@ import (
 
 	"github.com/0xquark/ctos/internal/procs"
 	"github.com/0xquark/ctos/internal/sysinfo"
-	"github.com/0xquark/ctos/internal/theme"
 	"github.com/0xquark/ctos/internal/widget"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -97,7 +96,6 @@ const (
 type Processes struct {
 	widget.Base
 	cfg     config
-	theme   theme.Theme
 	refresh time.Duration
 
 	all   []procs.Process // every process from the last sample
@@ -173,7 +171,6 @@ func New(ctx widget.Context) (widget.Widget, error) {
 
 	return &Processes{
 		cfg:        cfg,
-		theme:      ctx.Theme,
 		refresh:    refresh,
 		sort:       sortBy,
 		query:      cfg.Filter,

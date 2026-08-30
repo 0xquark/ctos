@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/0xquark/ctos/internal/theme"
 	"gopkg.in/yaml.v3"
 )
 
@@ -68,9 +69,12 @@ func Register(spec Spec) {
 }
 
 // binder is satisfied by any widget embedding Base. New uses it to hand the
-// widget its own name and frame title, so addressed messages and the frame
-// label work without the factory having to remember anything.
-type binder interface{ bind(name, title string) }
+// widget its own name, frame title and palette, so addressed messages, the
+// frame label and theming work without the factory having to remember
+// anything.
+type binder interface {
+	bind(name, title string, th theme.Theme)
+}
 
 // New constructs a widget of the named type.
 func New(typeName string, ctx Context) (Widget, error) {
@@ -87,7 +91,7 @@ func New(typeName string, ctx Context) (Widget, error) {
 		return nil, fmt.Errorf("%s %q: %w", typeName, ctx.Name, err)
 	}
 	if b, ok := w.(binder); ok {
-		b.bind(ctx.Name, resolveTitle(spec, ctx.Node))
+		b.bind(ctx.Name, resolveTitle(spec, ctx.Node), ctx.Theme)
 	}
 	return w, nil
 }

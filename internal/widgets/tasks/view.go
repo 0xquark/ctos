@@ -37,9 +37,9 @@ func (t *Tasks) View() string {
 	case t.H <= 0 || t.W <= 0:
 		return ""
 	case t.err != nil:
-		return t.theme.BadStyle().Render(t.cut(failM + " " + t.err.Error()))
+		return t.Theme().BadStyle().Render(t.cut(failM + " " + t.err.Error()))
 	case !t.loaded:
-		return t.theme.DimStyle().Render("reading " + t.path + "…")
+		return t.Theme().DimStyle().Render("reading " + t.path + "…")
 	}
 
 	// One line is a status strip, not a list: the same shape the system and
@@ -67,7 +67,7 @@ func (t *Tasks) headerLine() string {
 	case t.arm != armedNone:
 		return t.armedLine()
 	case t.status != "":
-		return t.cut(t.theme.WarnStyle().Render(" " + t.status))
+		return t.cut(t.Theme().WarnStyle().Render(" " + t.status))
 	default:
 		return t.summaryLine()
 	}
@@ -80,14 +80,14 @@ func (t *Tasks) inputLine() string {
 	if t.editing {
 		label = " ✎ "
 	}
-	line := t.theme.AccentStyle().Render(label) +
-		t.theme.TextStyle().Render(t.input) +
-		t.theme.AccentStyle().Render("█")
+	line := t.Theme().AccentStyle().Render(label) +
+		t.Theme().TextStyle().Render(t.input) +
+		t.Theme().AccentStyle().Render("█")
 
 	// The date syntax is only discoverable if something says it, and an
 	// empty box is exactly when there is room to.
 	if t.input == "" {
-		hint := t.theme.FaintStyle().Render("  task, or \"pay rent due:fri\"")
+		hint := t.Theme().FaintStyle().Render("  task, or \"pay rent due:fri\"")
 		if lipgloss.Width(line+hint) <= t.W {
 			line += hint
 		}
@@ -105,13 +105,13 @@ func (t *Tasks) armedLine() string {
 		prompt, key = fmt.Sprintf(" clear %s?", plural(t.counts().Done, "completed task")), "x"
 	}
 
-	keys := t.theme.DimStyle().Render("  ") +
-		t.theme.AccentStyle().Render("↵ "+key) + t.theme.DimStyle().Render(" yes  ") +
-		t.theme.AccentStyle().Render("esc") + t.theme.DimStyle().Render(" cancel")
+	keys := t.Theme().DimStyle().Render("  ") +
+		t.Theme().AccentStyle().Render("↵ "+key) + t.Theme().DimStyle().Render(" yes  ") +
+		t.Theme().AccentStyle().Render("esc") + t.Theme().DimStyle().Render(" cancel")
 
-	line := t.theme.BadStyle().Bold(true).Render(prompt) + keys
+	line := t.Theme().BadStyle().Bold(true).Render(prompt) + keys
 	if lipgloss.Width(line) > t.W {
-		return t.cut(t.theme.BadStyle().Bold(true).Render(prompt))
+		return t.cut(t.Theme().BadStyle().Bold(true).Render(prompt))
 	}
 	return line
 }
@@ -123,58 +123,58 @@ func (t *Tasks) summaryLine() string {
 	var parts []string
 
 	if c.Overdue > 0 {
-		parts = append(parts, t.theme.BadStyle().Bold(true).Render(fmt.Sprintf("%s %d", lateM, c.Overdue))+
-			t.theme.DimStyle().Render(" overdue"))
+		parts = append(parts, t.Theme().BadStyle().Bold(true).Render(fmt.Sprintf("%s %d", lateM, c.Overdue))+
+			t.Theme().DimStyle().Render(" overdue"))
 	}
 	if c.Today > 0 {
-		parts = append(parts, t.theme.WarnStyle().Render(fmt.Sprintf("%s %d", todayM, c.Today))+
-			t.theme.DimStyle().Render(" today"))
+		parts = append(parts, t.Theme().WarnStyle().Render(fmt.Sprintf("%s %d", todayM, c.Today))+
+			t.Theme().DimStyle().Render(" today"))
 	}
-	parts = append(parts, t.theme.TextStyle().Render(fmt.Sprintf("%d", c.Open))+t.theme.DimStyle().Render(" open"))
+	parts = append(parts, t.Theme().TextStyle().Render(fmt.Sprintf("%d", c.Open))+t.Theme().DimStyle().Render(" open"))
 	// The view comes before the done count: it is the reason the list is
 	// short, and a summary that does not explain that is misleading.
 	if t.show != todo.ShowAll {
-		parts = append(parts, t.theme.DimStyle().Render("showing ")+
-			t.theme.AccentStyle().Render(string(t.show)))
+		parts = append(parts, t.Theme().DimStyle().Render("showing ")+
+			t.Theme().AccentStyle().Render(string(t.show)))
 	}
 	if c.Done > 0 {
-		parts = append(parts, t.theme.FaintStyle().Render(fmt.Sprintf("%d done", c.Done)))
+		parts = append(parts, t.Theme().FaintStyle().Render(fmt.Sprintf("%d done", c.Done)))
 	}
 
-	return fit(parts, t.theme.FaintStyle().Render(" · "), t.W)
+	return fit(parts, t.Theme().FaintStyle().Render(" · "), t.W)
 }
 
 // strip renders the whole list on one line, for the status bar: what is late,
 // what is due today, and the next thing to do.
 func (t *Tasks) strip() string {
 	if t.err != nil {
-		return t.theme.BadStyle().Render(t.cut(" " + failM + " tasks"))
+		return t.Theme().BadStyle().Render(t.cut(" " + failM + " tasks"))
 	}
 	c := t.counts()
 	if c.Open == 0 {
 		if c.Done == 0 {
-			return t.theme.DimStyle().Render(" no tasks")
+			return t.Theme().DimStyle().Render(" no tasks")
 		}
-		return t.theme.GoodStyle().Render(" ✓ all done")
+		return t.Theme().GoodStyle().Render(" ✓ all done")
 	}
 
 	var parts []string
 	if c.Overdue > 0 {
-		parts = append(parts, t.theme.BadStyle().Bold(true).Render(fmt.Sprintf("%s %d", lateM, c.Overdue))+
-			t.theme.DimStyle().Render(" late"))
+		parts = append(parts, t.Theme().BadStyle().Bold(true).Render(fmt.Sprintf("%s %d", lateM, c.Overdue))+
+			t.Theme().DimStyle().Render(" late"))
 	}
 	if c.Today > 0 {
-		parts = append(parts, t.theme.WarnStyle().Render(fmt.Sprintf("%s %d", todayM, c.Today))+
-			t.theme.DimStyle().Render(" today"))
+		parts = append(parts, t.Theme().WarnStyle().Render(fmt.Sprintf("%s %d", todayM, c.Today))+
+			t.Theme().DimStyle().Render(" today"))
 	}
-	parts = append(parts, t.theme.TextStyle().Render(fmt.Sprintf("%d", c.Open))+t.theme.DimStyle().Render(" open"))
+	parts = append(parts, t.Theme().TextStyle().Render(fmt.Sprintf("%d", c.Open))+t.Theme().DimStyle().Render(" open"))
 
 	// The count says how much there is; the task says what it is. It goes
 	// last so a narrow bar drops it first.
 	if next, ok := t.next(); ok {
-		parts = append(parts, t.theme.FaintStyle().Render("▸ ")+t.theme.TextStyle().Render(next.Text))
+		parts = append(parts, t.Theme().FaintStyle().Render("▸ ")+t.Theme().TextStyle().Render(next.Text))
 	}
-	return fit(parts, t.theme.FaintStyle().Render(" · "), t.W)
+	return fit(parts, t.Theme().FaintStyle().Render(" · "), t.W)
 }
 
 // next is the most pressing open task: the first one a sorted list would show.
@@ -194,7 +194,7 @@ func (t *Tasks) listLines(height int) []string {
 		return nil
 	}
 	if len(t.rows) == 0 {
-		return pad([]string{t.theme.DimStyle().Render(" " + t.emptyText())}, height)
+		return pad([]string{t.Theme().DimStyle().Render(" " + t.emptyText())}, height)
 	}
 
 	// Headings cost a line each, so the scroll is worked out against fewer
@@ -250,7 +250,7 @@ func (t *Tasks) heading(name string) string {
 	if n := t.W - lipgloss.Width(label); n > 0 {
 		rule = strings.Repeat("─", n)
 	}
-	return t.theme.FaintStyle().Render(label + rule)
+	return t.Theme().FaintStyle().Render(label + rule)
 }
 
 // row renders one task: marker, checkbox, text, then a right-aligned date.
@@ -260,21 +260,21 @@ func (t *Tasks) row(task todo.Task, selected bool) string {
 		marker = "▸ "
 	}
 
-	box, boxStyle := openBox, t.theme.DimStyle()
+	box, boxStyle := openBox, t.Theme().DimStyle()
 	if task.Done {
-		box, boxStyle = doneBox, t.theme.GoodStyle()
+		box, boxStyle = doneBox, t.Theme().GoodStyle()
 	}
 
-	textStyle := t.theme.TextStyle()
+	textStyle := t.Theme().TextStyle()
 	switch {
 	case task.Done:
 		// Struck through as well as dimmed: a finished task should read
 		// as finished at a glance, not as a task in a paler colour.
-		textStyle = t.theme.FaintStyle().Strikethrough(true)
+		textStyle = t.Theme().FaintStyle().Strikethrough(true)
 	case selected && t.Focused():
-		textStyle = t.theme.AccentStyle().Bold(true)
+		textStyle = t.Theme().AccentStyle().Bold(true)
 	case selected:
-		textStyle = t.theme.TextStyle().Bold(true)
+		textStyle = t.Theme().TextStyle().Bold(true)
 	}
 
 	due := todo.DueLabel(task.Due, time.Now())
@@ -293,7 +293,7 @@ func (t *Tasks) row(task todo.Task, selected bool) string {
 	}
 
 	text := ansi.Truncate(task.Text, textW, "…")
-	line := t.theme.FaintStyle().Render(marker) +
+	line := t.Theme().FaintStyle().Render(marker) +
 		boxStyle.Render(box) + " " +
 		textStyle.Render(text)
 
@@ -308,13 +308,13 @@ func (t *Tasks) row(task todo.Task, selected bool) string {
 func (t *Tasks) dueStyle(task todo.Task) lipgloss.Style {
 	switch todo.BucketOf(task, time.Now()) {
 	case todo.Overdue:
-		return t.theme.BadStyle().Bold(true)
+		return t.Theme().BadStyle().Bold(true)
 	case todo.Today:
-		return t.theme.WarnStyle()
+		return t.Theme().WarnStyle()
 	case todo.Done:
-		return t.theme.FaintStyle()
+		return t.Theme().FaintStyle()
 	default:
-		return t.theme.DimStyle()
+		return t.Theme().DimStyle()
 	}
 }
 

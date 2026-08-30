@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xquark/ctos/internal/theme"
 	"github.com/0xquark/ctos/internal/widget"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -37,9 +36,8 @@ type config struct {
 // Clock shows the current local time.
 type Clock struct {
 	widget.Base
-	cfg   config
-	theme theme.Theme
-	now   time.Time
+	cfg config
+	now time.Time
 }
 
 // New builds a clock widget from its dashboard configuration.
@@ -52,7 +50,7 @@ func New(ctx widget.Context) (widget.Widget, error) {
 	if err := ctx.Decode(&cfg); err != nil {
 		return nil, err
 	}
-	return &Clock{cfg: cfg, theme: ctx.Theme, now: time.Now()}, nil
+	return &Clock{cfg: cfg, now: time.Now()}, nil
 }
 
 // Init schedules the first tick.
@@ -92,12 +90,12 @@ func (c *Clock) View() string {
 	if big, ok := c.renderBig(timeStr); ok {
 		body = big
 	} else {
-		body = c.theme.AccentStyle().Bold(true).Render(timeStr)
+		body = c.Theme().AccentStyle().Bold(true).Render(timeStr)
 	}
 
 	out := body
 	if dateStr != "" && c.H >= lipgloss.Height(body)+2 {
-		out = lipgloss.JoinVertical(lipgloss.Center, body, "", c.theme.DimStyle().Render(dateStr))
+		out = lipgloss.JoinVertical(lipgloss.Center, body, "", c.Theme().DimStyle().Render(dateStr))
 	}
 	if c.W <= 0 || c.H <= 0 {
 		return out
@@ -109,12 +107,12 @@ func (c *Clock) View() string {
 // The date is dropped rather than truncated when there is no room for it,
 // since half a date is worse than none and the time is the point.
 func (c *Clock) line(timeStr, dateStr string) string {
-	now := c.theme.AccentStyle().Bold(true).Render(timeStr)
+	now := c.Theme().AccentStyle().Bold(true).Render(timeStr)
 	if dateStr == "" {
 		return ansi.Truncate(now, c.W, "")
 	}
 
-	full := c.theme.DimStyle().Render(dateStr) + "  " + now
+	full := c.Theme().DimStyle().Render(dateStr) + "  " + now
 	if c.W <= 0 || lipgloss.Width(full) <= c.W {
 		return full
 	}
@@ -179,5 +177,5 @@ func (c *Clock) renderBig(s string) (string, bool) {
 		}
 		rows[i] = strings.Join(parts, " ")
 	}
-	return c.theme.AccentStyle().Render(strings.Join(rows, "\n")), true
+	return c.Theme().AccentStyle().Render(strings.Join(rows, "\n")), true
 }

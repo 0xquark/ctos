@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/0xquark/ctos/internal/humanize"
-	"github.com/0xquark/ctos/internal/theme"
 	"github.com/0xquark/ctos/internal/widget"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -79,7 +78,6 @@ type previewMsg struct {
 type Notes struct {
 	widget.Base
 	cfg    config
-	theme  theme.Theme
 	editor string
 
 	notes  []note
@@ -110,7 +108,7 @@ func New(ctx widget.Context) (widget.Widget, error) {
 	if cfg.Limit <= 0 {
 		cfg.Limit = 200
 	}
-	return &Notes{cfg: cfg, theme: ctx.Theme, editor: ctx.Editor}, nil
+	return &Notes{cfg: cfg, editor: ctx.Editor}, nil
 }
 
 // Init kicks off the first directory scan.
@@ -340,11 +338,11 @@ func (n *Notes) split() (listH, previewH int) {
 func (n *Notes) View() string {
 	switch {
 	case n.err != nil:
-		return n.theme.BadStyle().Render("⚠ " + n.err.Error())
+		return n.Theme().BadStyle().Render("⚠ " + n.err.Error())
 	case !n.loaded:
-		return n.theme.DimStyle().Render("loading…")
+		return n.Theme().DimStyle().Render("loading…")
 	case len(n.notes) == 0:
-		return n.theme.DimStyle().Render("no notes in " + n.cfg.Path)
+		return n.Theme().DimStyle().Render("no notes in " + n.cfg.Path)
 	}
 
 	listH, previewH := n.split()
@@ -386,7 +384,7 @@ func (n *Notes) rule() string {
 	if n.W <= 0 {
 		return ""
 	}
-	return n.theme.FaintStyle().Render(strings.Repeat("─", n.W))
+	return n.Theme().FaintStyle().Render(strings.Repeat("─", n.W))
 }
 
 // previewView renders the head of the selected note.
@@ -395,9 +393,9 @@ func (n *Notes) previewView(height int) string {
 
 	switch {
 	case n.previewErr != nil:
-		lines = []string{n.theme.BadStyle().Render("⚠ " + n.previewErr.Error())}
+		lines = []string{n.Theme().BadStyle().Render("⚠ " + n.previewErr.Error())}
 	case n.previewPath != n.selectedPath():
-		lines = []string{n.theme.FaintStyle().Render("…")}
+		lines = []string{n.Theme().FaintStyle().Render("…")}
 	default:
 		lines = n.renderPreviewLines(height)
 	}
@@ -428,22 +426,22 @@ func (n *Notes) renderPreviewLines(height int) []string {
 
 		if strings.HasPrefix(trimmed, "```") {
 			inCodeFence = !inCodeFence
-			out = append(out, n.theme.FaintStyle().Render(humanize.Truncate(line, n.W)))
+			out = append(out, n.Theme().FaintStyle().Render(humanize.Truncate(line, n.W)))
 			continue
 		}
 
 		text := humanize.Truncate(line, n.W)
 		switch {
 		case inCodeFence:
-			out = append(out, n.theme.DimStyle().Render(text))
+			out = append(out, n.Theme().DimStyle().Render(text))
 		case strings.HasPrefix(trimmed, "#"):
-			out = append(out, n.theme.AccentStyle().Bold(true).Render(text))
+			out = append(out, n.Theme().AccentStyle().Bold(true).Render(text))
 		case strings.HasPrefix(trimmed, "> "):
-			out = append(out, n.theme.DimStyle().Italic(true).Render(text))
+			out = append(out, n.Theme().DimStyle().Italic(true).Render(text))
 		case isBullet(trimmed):
 			out = append(out, n.bulletLine(line))
 		default:
-			out = append(out, n.theme.TextStyle().Render(text))
+			out = append(out, n.Theme().TextStyle().Render(text))
 		}
 	}
 	return out
@@ -464,7 +462,7 @@ func (n *Notes) bulletLine(line string) string {
 	indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
 	rest := strings.TrimLeft(line, " \t")
 	body := humanize.Truncate(indent+rest[2:], max(0, n.W-2))
-	return n.theme.AccentStyle().Render(indent+"•") + " " + n.theme.TextStyle().Render(body)
+	return n.Theme().AccentStyle().Render(indent+"•") + " " + n.Theme().TextStyle().Render(body)
 }
 
 // line renders one list row: marker, filename, then a right-aligned age.
@@ -472,12 +470,12 @@ func (n *Notes) line(nt note, selected bool) string {
 	age := humanize.RelTime(nt.mod)
 
 	marker := "  "
-	nameStyle := n.theme.TextStyle()
+	nameStyle := n.Theme().TextStyle()
 	if selected {
 		marker = "▸ "
-		nameStyle = n.theme.AccentStyle().Bold(true)
+		nameStyle = n.Theme().AccentStyle().Bold(true)
 		if !n.Focused() {
-			nameStyle = n.theme.TextStyle().Bold(true)
+			nameStyle = n.Theme().TextStyle().Bold(true)
 		}
 	}
 
@@ -491,7 +489,7 @@ func (n *Notes) line(nt note, selected bool) string {
 	name := humanize.Truncate(nt.display, nameWidth)
 	pad := strings.Repeat(" ", max(0, nameWidth-lipgloss.Width(name)))
 
-	return n.theme.FaintStyle().Render(marker) +
+	return n.Theme().FaintStyle().Render(marker) +
 		nameStyle.Render(name) + pad + " " +
-		n.theme.FaintStyle().Render(age)
+		n.Theme().FaintStyle().Render(age)
 }

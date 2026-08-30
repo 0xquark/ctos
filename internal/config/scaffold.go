@@ -17,8 +17,13 @@ editor: ${EDITOR:-vi}
 default_dashboard: home
 
 theme:
-  # Any hex colour. Used for focus borders, selections and highlights.
-  accent: "#ff6b35"
+  # Run "ctos themes" to see them all with a swatch each, or press ctrl+t in
+  # ctOS to cycle through them — the choice is written back here.
+  name: ember
+  # Optional. Any hex colour, overriding just this theme's accent — the colour
+  # of focus borders, selections and highlights. Switching theme with ctrl+t
+  # removes it, since the new theme brings its own.
+  # accent: "#ff6b35"
 
 refresh:
   # Polling interval for widgets that don't set their own.

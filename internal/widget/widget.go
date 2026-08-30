@@ -108,13 +108,27 @@ type Base struct {
 	name    string
 	title   string
 	focused bool
+	theme   theme.Theme
 }
 
-// bind records the widget's name and resolved frame title. The registry calls
-// it after the factory returns, so a widget author cannot forget to. It is
-// unexported deliberately: only a type embedding Base can satisfy the
-// interface the registry looks for.
-func (b *Base) bind(name, title string) { b.name, b.title = name, title }
+// bind records the widget's name, resolved frame title and palette. The
+// registry calls it after the factory returns, so a widget author cannot
+// forget to. It is unexported deliberately: only a type embedding Base can
+// satisfy the interface the registry looks for.
+func (b *Base) bind(name, title string, th theme.Theme) {
+	b.name, b.title, b.theme = name, title, th
+}
+
+// setTheme repaints the widget. See [Retheme].
+func (b *Base) setTheme(th theme.Theme) { b.theme = th }
+
+// Theme is the palette to render with.
+//
+// It lives on Base rather than in each widget's own struct so that a theme
+// change at runtime is one call per widget rather than a field every widget
+// author has to remember to keep swappable. Read it at render time, not once
+// at construction: the value it returns changes when the user switches theme.
+func (b *Base) Theme() theme.Theme { return b.theme }
 
 // Name is the widget's key in the dashboard's widgets map.
 func (b *Base) Name() string { return b.name }
@@ -158,6 +172,22 @@ type KeyGrabber interface {
 func Grabbing(w Widget) bool {
 	g, ok := w.(KeyGrabber)
 	return ok && g.GrabsKeys()
+}
+
+// rethemer is satisfied by any widget embedding Base, the same trick the
+// registry uses for bind: the method is unexported, so nothing outside this
+// package can claim to be repaintable without actually embedding Base.
+type rethemer interface{ setTheme(theme.Theme) }
+
+// Retheme repaints a widget with a new palette.
+//
+// Every widget renders through Base.Theme, so this is the whole of a live
+// theme switch: no widget is rebuilt, and none loses its scroll position,
+// filter or loaded data.
+func Retheme(w Widget, th theme.Theme) {
+	if r, ok := w.(rethemer); ok {
+		r.setTheme(th)
+	}
 }
 
 // Liner is an optional interface for a widget that can say how tall its

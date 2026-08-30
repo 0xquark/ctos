@@ -14,7 +14,6 @@ import (
 	"github.com/0xquark/ctos/internal/procs"
 	"github.com/0xquark/ctos/internal/spark"
 	"github.com/0xquark/ctos/internal/sysinfo"
-	"github.com/0xquark/ctos/internal/theme"
 	"github.com/0xquark/ctos/internal/widget"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -137,7 +136,6 @@ type tickMsg struct{}
 // System is a live vitals pane.
 type System struct {
 	widget.Base
-	theme   theme.Theme
 	refresh time.Duration
 
 	style   style
@@ -192,7 +190,6 @@ func New(ctx widget.Context) (widget.Widget, error) {
 	deltas := cfg.Deltas == nil || *cfg.Deltas
 
 	s := &System{
-		theme:       ctx.Theme,
 		refresh:     refresh,
 		style:       st,
 		metrics:     metrics,

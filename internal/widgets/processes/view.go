@@ -102,11 +102,11 @@ func fits(keep map[colKey]bool, width int) bool {
 func (p *Processes) View() string {
 	switch {
 	case p.err != nil && len(p.all) == 0:
-		return p.theme.BadStyle().Render("⚠ " + p.err.Error())
+		return p.Theme().BadStyle().Render("⚠ " + p.err.Error())
 	case p.loading && len(p.all) == 0:
-		return p.theme.DimStyle().Render("reading process table…")
+		return p.Theme().DimStyle().Render("reading process table…")
 	case len(p.all) == 0:
-		return p.theme.DimStyle().Render("no processes")
+		return p.Theme().DimStyle().Render("no processes")
 	}
 
 	var b strings.Builder
@@ -126,7 +126,7 @@ func (p *Processes) View() string {
 
 	if len(p.rows) == 0 {
 		b.WriteByte('\n')
-		b.WriteString(p.theme.DimStyle().Render("  nothing matches " + strconv.Quote(p.query)))
+		b.WriteString(p.Theme().DimStyle().Render("  nothing matches " + strconv.Quote(p.query)))
 		return b.String()
 	}
 
@@ -150,7 +150,7 @@ func (p *Processes) View() string {
 // rule separates the list from the detail pane, the same way the notes widget
 // separates its list from the preview.
 func (p *Processes) rule() string {
-	return p.theme.FaintStyle().Render(strings.Repeat("─", max(0, p.W)))
+	return p.Theme().FaintStyle().Render(strings.Repeat("─", max(0, p.W)))
 }
 
 // detailHeight is how many rows the detail pane gets, excluding its rule.
@@ -203,7 +203,7 @@ func (p *Processes) headerLine() string {
 	case p.typing:
 		return p.filterLine()
 	case p.status != "":
-		return truncate(p.theme.WarnStyle().Render(" "+p.status), p.W)
+		return truncate(p.Theme().WarnStyle().Render(" "+p.status), p.W)
 	default:
 		return p.summaryLine()
 	}
@@ -212,22 +212,22 @@ func (p *Processes) headerLine() string {
 func (p *Processes) confirmLine() string {
 	c := p.confirm
 	prompt := fmt.Sprintf(" kill %s (%d)?", c.Name(), c.PID)
-	keys := p.theme.DimStyle().Render("  ") +
-		p.theme.AccentStyle().Render("↵") + p.theme.DimStyle().Render(" term  ") +
-		p.theme.AccentStyle().Render("k") + p.theme.DimStyle().Render(" kill  ") +
-		p.theme.AccentStyle().Render("esc") + p.theme.DimStyle().Render(" cancel")
+	keys := p.Theme().DimStyle().Render("  ") +
+		p.Theme().AccentStyle().Render("↵") + p.Theme().DimStyle().Render(" term  ") +
+		p.Theme().AccentStyle().Render("k") + p.Theme().DimStyle().Render(" kill  ") +
+		p.Theme().AccentStyle().Render("esc") + p.Theme().DimStyle().Render(" cancel")
 
-	line := p.theme.BadStyle().Bold(true).Render(prompt) + keys
+	line := p.Theme().BadStyle().Bold(true).Render(prompt) + keys
 	if lipgloss.Width(line) > p.W {
-		return truncate(p.theme.BadStyle().Bold(true).Render(prompt), p.W)
+		return truncate(p.Theme().BadStyle().Bold(true).Render(prompt), p.W)
 	}
 	return line
 }
 
 func (p *Processes) filterLine() string {
-	label := p.theme.AccentStyle().Render(" /")
+	label := p.Theme().AccentStyle().Render(" /")
 	// A block cursor makes it obvious the widget is swallowing keystrokes.
-	return truncate(label+p.theme.TextStyle().Render(p.query)+p.theme.AccentStyle().Render("█"), p.W)
+	return truncate(label+p.Theme().TextStyle().Render(p.query)+p.Theme().AccentStyle().Render("█"), p.W)
 }
 
 // summaryLine is the glanceable state of the machine: load, process count and
@@ -237,27 +237,27 @@ func (p *Processes) summaryLine() string {
 
 	if p.load.OK {
 		parts = append(parts,
-			p.theme.DimStyle().Render("load ")+
+			p.Theme().DimStyle().Render("load ")+
 				p.loadStyle(p.load.One).Render(fmt.Sprintf("%.2f", p.load.One))+
-				p.theme.FaintStyle().Render(fmt.Sprintf(" %.2f %.2f", p.load.Five, p.load.Fifteen)))
+				p.Theme().FaintStyle().Render(fmt.Sprintf(" %.2f %.2f", p.load.Five, p.load.Fifteen)))
 	}
 
 	count := fmt.Sprintf("%d", len(p.rows))
 	if len(p.rows) != len(p.all) {
 		count = fmt.Sprintf("%d/%d", len(p.rows), len(p.all))
 	}
-	procsPart := p.theme.TextStyle().Render(count) + p.theme.DimStyle().Render(" procs")
+	procsPart := p.Theme().TextStyle().Render(count) + p.Theme().DimStyle().Render(" procs")
 	if n := running(p.rows); n > 0 {
-		procsPart += p.theme.GoodStyle().Render(fmt.Sprintf(" %d", n)) + p.theme.DimStyle().Render(" running")
+		procsPart += p.Theme().GoodStyle().Render(fmt.Sprintf(" %d", n)) + p.Theme().DimStyle().Render(" running")
 	}
 	parts = append(parts, procsPart)
 
 	if p.query != "" {
-		parts = append(parts, p.theme.AccentStyle().Render("/"+p.query))
+		parts = append(parts, p.Theme().AccentStyle().Render("/"+p.query))
 	}
-	parts = append(parts, p.theme.DimStyle().Render("sort ")+p.theme.AccentStyle().Render(p.sort.String()))
+	parts = append(parts, p.Theme().DimStyle().Render("sort ")+p.Theme().AccentStyle().Render(p.sort.String()))
 
-	sep := p.theme.FaintStyle().Render(" · ")
+	sep := p.Theme().FaintStyle().Render(" · ")
 	for n := len(parts); n > 0; n-- {
 		line := " " + strings.Join(parts[:n], sep)
 		if lipgloss.Width(line) <= p.W {
@@ -273,11 +273,11 @@ func (p *Processes) loadStyle(load float64) lipgloss.Style {
 	per := load / float64(sysinfo.CPUs())
 	switch {
 	case per >= 2:
-		return p.theme.BadStyle().Bold(true)
+		return p.Theme().BadStyle().Bold(true)
 	case per >= 1:
-		return p.theme.WarnStyle()
+		return p.Theme().WarnStyle()
 	default:
-		return p.theme.GoodStyle()
+		return p.Theme().GoodStyle()
 	}
 }
 
@@ -310,19 +310,19 @@ func (p *Processes) columnHeader(cols []column) string {
 
 	for _, c := range cols {
 		head := c.head
-		style := p.theme.FaintStyle()
+		style := p.Theme().FaintStyle()
 		if c.key == active {
 			head += arrow
-			style = p.theme.AccentStyle()
+			style = p.Theme().AccentStyle()
 		}
 		b.WriteString(style.Render(align(head, c.width, c.right)))
 		b.WriteByte(' ')
 	}
 
-	command, style := "COMMAND", p.theme.FaintStyle()
+	command, style := "COMMAND", p.Theme().FaintStyle()
 	if active == colCommand {
 		command += arrow
-		style = p.theme.AccentStyle()
+		style = p.Theme().AccentStyle()
 	}
 	b.WriteString(style.Render(command))
 
@@ -338,9 +338,9 @@ func (p *Processes) row(proc procs.Process, cols []column, selected bool) string
 
 	var b strings.Builder
 	if selected && p.Focused() {
-		b.WriteString(p.theme.AccentStyle().Bold(true).Render(marker))
+		b.WriteString(p.Theme().AccentStyle().Bold(true).Render(marker))
 	} else {
-		b.WriteString(p.theme.FaintStyle().Render(marker))
+		b.WriteString(p.Theme().FaintStyle().Render(marker))
 	}
 
 	used := markerWidth
@@ -360,9 +360,9 @@ func (p *Processes) row(proc procs.Process, cols []column, selected bool) string
 func (p *Processes) cell(proc procs.Process, c column) (string, lipgloss.Style) {
 	switch c.key {
 	case colPID:
-		return strconv.Itoa(proc.PID), p.theme.DimStyle()
+		return strconv.Itoa(proc.PID), p.Theme().DimStyle()
 	case colUser:
-		return humanize.Truncate(proc.User, c.width), p.theme.DimStyle()
+		return humanize.Truncate(proc.User, c.width), p.Theme().DimStyle()
 	case colCPU:
 		// The gauge is pinned to the column's left edge and the number is
 		// right-aligned beside it, so the bar reads as a bar chart rather
@@ -371,11 +371,11 @@ func (p *Processes) cell(proc procs.Process, c column) (string, lipgloss.Style) 
 	case colMem:
 		return pct(proc.Mem), p.usageStyle(proc.Mem, 20, 5)
 	case colRSS:
-		return humanize.Bytes(proc.RSS), p.theme.DimStyle()
+		return humanize.Bytes(proc.RSS), p.Theme().DimStyle()
 	case colTime:
-		return shortDuration(proc.Elapsed), p.theme.FaintStyle()
+		return shortDuration(proc.Elapsed), p.Theme().FaintStyle()
 	default:
-		return "", p.theme.TextStyle()
+		return "", p.Theme().TextStyle()
 	}
 }
 
@@ -384,24 +384,24 @@ func (p *Processes) cell(proc procs.Process, c column) (string, lipgloss.Style) 
 func (p *Processes) usageStyle(v, high, mid float64) lipgloss.Style {
 	switch {
 	case v >= high:
-		return p.theme.BadStyle().Bold(true)
+		return p.Theme().BadStyle().Bold(true)
 	case v >= mid:
-		return p.theme.WarnStyle()
+		return p.Theme().WarnStyle()
 	case v > 0:
-		return p.theme.TextStyle()
+		return p.Theme().TextStyle()
 	default:
-		return p.theme.FaintStyle()
+		return p.Theme().FaintStyle()
 	}
 }
 
 func (p *Processes) commandStyle(selected bool) lipgloss.Style {
 	if !selected {
-		return p.theme.TextStyle()
+		return p.Theme().TextStyle()
 	}
 	if p.Focused() {
-		return p.theme.AccentStyle().Bold(true)
+		return p.Theme().AccentStyle().Bold(true)
 	}
-	return p.theme.TextStyle().Bold(true)
+	return p.Theme().TextStyle().Bold(true)
 }
 
 // commandText shows the short program name, and appends its arguments only

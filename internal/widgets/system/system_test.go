@@ -262,13 +262,13 @@ func TestLayoutFitsTheWidthItWasGiven(t *testing.T) {
 // idle, so anything above zero keeps one cell.
 func TestBarAlwaysShowsANonZeroReading(t *testing.T) {
 	s := loaded(t, "type: system")
-	if got := stripANSI(s.bar(0.4, 10, s.theme.GoodStyle())); !strings.HasPrefix(got, "█") {
+	if got := stripANSI(s.bar(0.4, 10, s.Theme().GoodStyle())); !strings.HasPrefix(got, "█") {
 		t.Errorf("bar(0.4%%) = %q, want one filled cell", got)
 	}
-	if got := stripANSI(s.bar(0, 10, s.theme.GoodStyle())); strings.Contains(got, "█") {
+	if got := stripANSI(s.bar(0, 10, s.Theme().GoodStyle())); strings.Contains(got, "█") {
 		t.Errorf("bar(0%%) = %q, want no filled cells", got)
 	}
-	if got := stripANSI(s.bar(100, 10, s.theme.GoodStyle())); got != strings.Repeat("█", 10) {
+	if got := stripANSI(s.bar(100, 10, s.Theme().GoodStyle())); got != strings.Repeat("█", 10) {
 		t.Errorf("bar(100%%) = %q, want a full bar", got)
 	}
 }

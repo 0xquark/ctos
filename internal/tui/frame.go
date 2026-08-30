@@ -8,16 +8,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// Frame border runes. Rounded corners match the rest of the Charm ecosystem.
-const (
-	cornerTL = "╭"
-	cornerTR = "╮"
-	cornerBL = "╰"
-	cornerBR = "╯"
-	horiz    = "─"
-	vert     = "│"
-)
-
 // FrameOverhead is the number of cells the frame consumes on each axis:
 // a border and one column of padding on each side horizontally, and a border
 // row top and bottom vertically.
@@ -62,12 +52,13 @@ func Frame(t theme.Theme, title string, state FrameState, w, h int, content stri
 		title += " ◆ moving"
 	}
 	border := lipgloss.NewStyle().Foreground(borderColor)
+	c := t.Chrome
 
 	innerW := w - FrameOverheadX
 	innerH := h - FrameOverheadY
 
 	var b strings.Builder
-	b.WriteString(topBorder(border, titleStyle, title, w))
+	b.WriteString(topBorder(c, border, titleStyle, title, w))
 	b.WriteByte('\n')
 
 	lines := strings.Split(content, "\n")
@@ -81,39 +72,40 @@ func Frame(t theme.Theme, title string, state FrameState, w, h int, content stri
 		}
 		pad := strings.Repeat(" ", max(0, innerW-lipgloss.Width(line)))
 
-		b.WriteString(border.Render(vert))
+		b.WriteString(border.Render(c.Vertical))
 		b.WriteByte(' ')
 		b.WriteString(line)
 		b.WriteString(pad)
 		b.WriteByte(' ')
-		b.WriteString(border.Render(vert))
+		b.WriteString(border.Render(c.Vertical))
 		b.WriteByte('\n')
 	}
 
-	b.WriteString(border.Render(cornerBL + strings.Repeat(horiz, w-2) + cornerBR))
+	b.WriteString(border.Render(c.BottomLeft + strings.Repeat(c.Horizontal, w-2) + c.BottomRight))
 	return b.String()
 }
 
-// topBorder renders "╭─ title ───────╮", trimming the title if it would not fit.
-func topBorder(border, titleStyle lipgloss.Style, title string, w int) string {
+// topBorder renders "╭─ title ───────╮", or whatever the theme's chrome spells
+// that as, trimming the title if it would not fit.
+func topBorder(c theme.Chrome, border, titleStyle lipgloss.Style, title string, w int) string {
 	span := w - 2 // between the corners
+	plain := border.Render(c.TopLeft + strings.Repeat(c.Horizontal, span) + c.TopRight)
 
 	if title == "" {
-		return border.Render(cornerTL + strings.Repeat(horiz, span) + cornerTR)
+		return plain
 	}
 
-	// "─ " before and " " after the title.
-	const decoration = 3
+	decoration := lipgloss.Width(c.TitleOpen) + lipgloss.Width(c.TitleClose)
 	avail := span - decoration
 	if avail < 1 {
-		return border.Render(cornerTL + strings.Repeat(horiz, span) + cornerTR)
+		return plain
 	}
 	if lipgloss.Width(title) > avail {
 		title = ansi.Truncate(title, avail, "…")
 	}
 
-	fill := span - decoration - lipgloss.Width(title)
-	return border.Render(cornerTL+horiz+" ") +
+	fill := avail - lipgloss.Width(title)
+	return border.Render(c.TopLeft+c.TitleOpen) +
 		titleStyle.Render(title) +
-		border.Render(" "+strings.Repeat(horiz, max(0, fill))+cornerTR)
+		border.Render(c.TitleClose+strings.Repeat(c.Horizontal, max(0, fill))+c.TopRight)
 }

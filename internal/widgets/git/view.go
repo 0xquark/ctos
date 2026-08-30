@@ -48,9 +48,9 @@ func (g *Git) View() string {
 	case g.H <= 0 || g.W <= 0:
 		return ""
 	case g.err != nil:
-		return g.theme.BadStyle().Render(ansi.Truncate(failMark+" "+g.err.Error(), g.W, "…"))
+		return g.Theme().BadStyle().Render(ansi.Truncate(failMark+" "+g.err.Error(), g.W, "…"))
 	case !g.loaded:
-		return g.theme.DimStyle().Render("reading repositories…")
+		return g.Theme().DimStyle().Render("reading repositories…")
 	}
 
 	list := g.visible()
@@ -59,7 +59,7 @@ func (g *Git) View() string {
 	// widget takes in the bar, and for the same reason.
 	if g.H == 1 {
 		if len(list) == 0 {
-			return g.theme.DimStyle().Render(g.emptyText())
+			return g.Theme().DimStyle().Render(g.emptyText())
 		}
 		return g.strip(list)
 	}
@@ -68,7 +68,7 @@ func (g *Git) View() string {
 	// what you are choosing between on the left, what you have chosen on
 	// the right. A narrow one shows the panel the cursor is in.
 	if lw, dw := g.split(); dw > 0 {
-		return sideBySide(g.listPanel(list, lw), g.detailPanel(dw), lw, dw, g.H)
+		return sideBySide(g.Theme().FaintStyle(), g.listPanel(list, lw), g.detailPanel(dw), lw, dw, g.H)
 	}
 	if g.mode == modeRepo {
 		return strings.Join(g.repoPanel(g.W), "\n")
@@ -127,8 +127,8 @@ const (
 
 // sideBySide draws the two panels with a rule between them, each padded to its
 // own width so the rule stays straight down the pane.
-func sideBySide(left, right []string, lw, rw, h int) string {
-	rule := lipgloss.NewStyle().Foreground(lipgloss.Color("238")).Render("│")
+func sideBySide(st lipgloss.Style, left, right []string, lw, rw, h int) string {
+	rule := st.Render("│")
 
 	out := make([]string, h)
 	for i := range out {
@@ -156,7 +156,7 @@ func padTo(s string, w int) string {
 // listPanel is the repository list and its summary, as lines.
 func (g *Git) listPanel(list []repos.Repo, w int) []string {
 	if len(list) == 0 {
-		return []string{g.theme.DimStyle().Render(ansi.Truncate(g.emptyText(), w, "…"))}
+		return []string{g.Theme().DimStyle().Render(ansi.Truncate(g.emptyText(), w, "…"))}
 	}
 
 	lines := make([]string, 0, g.H)
@@ -182,7 +182,7 @@ func (g *Git) detailPanel(w int) []string {
 		return nil
 	}
 	if r.Err != nil {
-		return []string{g.theme.BadStyle().Render(r.Err.Error())}
+		return []string{g.Theme().BadStyle().Render(r.Err.Error())}
 	}
 
 	lines := []string{g.detailHeader(r, w)}
@@ -204,11 +204,11 @@ func (g *Git) detailPanel(w int) []string {
 func (g *Git) detailHeader(r repos.Repo, w int) string {
 	if g.typing {
 		// A block cursor makes it obvious the widget has the keyboard.
-		return ansi.Truncate(g.theme.AccentStyle().Render("commit: ")+
-			g.theme.TextStyle().Render(g.message)+g.theme.AccentStyle().Render("█"), w, "…")
+		return ansi.Truncate(g.Theme().AccentStyle().Render("commit: ")+
+			g.Theme().TextStyle().Render(g.message)+g.Theme().AccentStyle().Render("█"), w, "…")
 	}
 
-	left := g.theme.AccentStyle().Bold(true).Render(r.Name) + "  " + g.refStyle(r).Render(r.Ref())
+	left := g.Theme().AccentStyle().Bold(true).Render(r.Name) + "  " + g.refStyle(r).Render(r.Ref())
 	if !r.Clean() || !r.Synced() {
 		left += "  " + g.state(r)
 	}
@@ -216,11 +216,11 @@ func (g *Git) detailHeader(r repos.Repo, w int) string {
 	right := ""
 	switch {
 	case g.busy:
-		right = g.theme.DimStyle().Render("working…")
+		right = g.Theme().DimStyle().Render("working…")
 	case g.status != "":
-		right = g.theme.WarnStyle().Render(g.status)
+		right = g.Theme().WarnStyle().Render(g.status)
 	case r.Upstream != "":
-		right = g.theme.FaintStyle().Render(r.Upstream)
+		right = g.Theme().FaintStyle().Render(r.Upstream)
 	}
 
 	if n := w - lipgloss.Width(left) - lipgloss.Width(right); right != "" && n >= 1 {
@@ -232,7 +232,7 @@ func (g *Git) detailHeader(r repos.Repo, w int) string {
 // filesSection is the changed files, headed by how many there are.
 func (g *Git) filesSection(r repos.Repo, w, room int) []string {
 	if len(r.Files) == 0 {
-		return []string{g.theme.GoodStyle().Render(cleanMark + " nothing to commit")}
+		return []string{g.Theme().GoodStyle().Render(cleanMark + " nothing to commit")}
 	}
 
 	lines := []string{g.section(fmt.Sprintf("changes (%d)", len(r.Files)), w, g.mode == modeRepo, changesHint)}
@@ -246,7 +246,7 @@ func (g *Git) filesSection(r repos.Repo, w, room int) []string {
 	// The last visible row gives itself up to say how much is below it,
 	// which is the only honest thing to do with a list that does not fit.
 	if hidden := len(r.Files) - end; hidden > 0 && len(lines) > 1 {
-		lines[len(lines)-1] = g.theme.FaintStyle().Render(fmt.Sprintf("  … %d more", hidden+1))
+		lines[len(lines)-1] = g.Theme().FaintStyle().Render(fmt.Sprintf("  … %d more", hidden+1))
 	}
 	return lines
 }
@@ -256,11 +256,11 @@ func (g *Git) commitsSection(r repos.Repo, w, room int) []string {
 	lines := []string{g.section("recent", w, false, "")}
 	switch {
 	case g.commitsErr != nil:
-		return append(lines, g.theme.FaintStyle().Render(ansi.Truncate(g.commitsErr.Error(), w, "…")))
+		return append(lines, g.Theme().FaintStyle().Render(ansi.Truncate(g.commitsErr.Error(), w, "…")))
 	case g.commitsPath != r.Path:
-		return append(lines, g.theme.FaintStyle().Render("…"))
+		return append(lines, g.Theme().FaintStyle().Render("…"))
 	case len(g.commits) == 0:
-		return append(lines, g.theme.FaintStyle().Render("no commits yet"))
+		return append(lines, g.Theme().FaintStyle().Render("no commits yet"))
 	}
 
 	for _, c := range g.commits {
@@ -285,12 +285,12 @@ func (g *Git) commitRow(c repos.Commit, w int) string {
 		room -= lipgloss.Width(author) + 1
 	}
 
-	line := g.theme.FaintStyle().Render(align(humanize.RelTime(c.When), ageWidth)) + " " +
-		g.theme.TextStyle().Render(humanize.Truncate(c.Subject, max(1, room)))
+	line := g.Theme().FaintStyle().Render(align(humanize.RelTime(c.When), ageWidth)) + " " +
+		g.Theme().TextStyle().Render(humanize.Truncate(c.Subject, max(1, room)))
 	if author == "" {
 		return ansi.Truncate(line, w, "…")
 	}
-	return pad(line, w-lipgloss.Width(author)-1) + " " + g.theme.FaintStyle().Render(author)
+	return pad(line, w-lipgloss.Width(author)-1) + " " + g.Theme().FaintStyle().Render(author)
 }
 
 // The author column. Below authorFrom the panel spends everything on the
@@ -306,19 +306,19 @@ const (
 // rule carries that panel's keys — which is the only place the user finds out
 // that "c" commits.
 func (g *Git) section(label string, w int, active bool, hint string) string {
-	style := g.theme.DimStyle()
+	style := g.Theme().DimStyle()
 	if active && g.Focused() {
-		style = g.theme.AccentStyle().Bold(true)
+		style = g.Theme().AccentStyle().Bold(true)
 	}
 	head := style.Render(label)
 
 	tail := ""
 	if active && hint != "" && w-lipgloss.Width(head)-lipgloss.Width(hint)-4 >= minRule {
-		tail = " " + g.theme.FaintStyle().Render(hint)
+		tail = " " + g.Theme().FaintStyle().Render(hint)
 	}
 
 	if n := w - lipgloss.Width(head) - lipgloss.Width(tail) - 2; n > 0 {
-		return head + " " + g.theme.FaintStyle().Render(strings.Repeat("─", n)) + tail
+		return head + " " + g.Theme().FaintStyle().Render(strings.Repeat("─", n)) + tail
 	}
 	return ansi.Truncate(head, w, "…")
 }
@@ -336,7 +336,7 @@ const changesHint = "↵ stage · c commit · S stash · g more"
 // both. It is the same content: the list is what the cursor left behind.
 func (g *Git) repoPanel(w int) []string {
 	if _, ok := g.current(); !ok {
-		return []string{g.theme.DimStyle().Render("that repository is gone")}
+		return []string{g.Theme().DimStyle().Render("that repository is gone")}
 	}
 	return g.detailPanel(w)
 }
@@ -356,8 +356,8 @@ func (g *Git) fileRow(f repos.File, selected bool, w int) string {
 	// first is what is already recorded and the second is what is not, and
 	// that difference is the whole reason to look at this list.
 	code := f.Status()
-	b.WriteString(g.theme.GoodStyle().Render(string(code[0])))
-	b.WriteString(g.theme.WarnStyle().Render(string(code[1])))
+	b.WriteString(g.Theme().GoodStyle().Render(string(code[0])))
+	b.WriteString(g.Theme().WarnStyle().Render(string(code[1])))
 	b.WriteString("  ")
 
 	path := f.Path
@@ -380,20 +380,20 @@ func (g *Git) lit(selected bool, panel mode) bool {
 
 func (g *Git) markerStyle(lit bool) lipgloss.Style {
 	if lit {
-		return g.theme.AccentStyle().Bold(true)
+		return g.Theme().AccentStyle().Bold(true)
 	}
-	return g.theme.FaintStyle()
+	return g.Theme().FaintStyle()
 }
 
 // pathStyle dims what git is not tracking and flags what is in conflict.
 func (g *Git) pathStyle(f repos.File) lipgloss.Style {
 	switch {
 	case f.Conflicted():
-		return g.theme.BadStyle().Bold(true)
+		return g.Theme().BadStyle().Bold(true)
 	case f.Untracked():
-		return g.theme.DimStyle()
+		return g.Theme().DimStyle()
 	default:
-		return g.theme.TextStyle()
+		return g.Theme().TextStyle()
 	}
 }
 
@@ -439,21 +439,21 @@ func (g *Git) summaryLine(list []repos.Repo, w int) string {
 		}
 	}
 
-	parts := []string{g.theme.TextStyle().Render(fmt.Sprint(len(list))) + g.theme.DimStyle().Render(" repos")}
+	parts := []string{g.Theme().TextStyle().Render(fmt.Sprint(len(list))) + g.Theme().DimStyle().Render(" repos")}
 	if dirty > 0 {
-		parts = append(parts, g.theme.WarnStyle().Render(mark(dirtyMark, dirty)+" dirty"))
+		parts = append(parts, g.Theme().WarnStyle().Render(mark(dirtyMark, dirty)+" dirty"))
 	}
 	if behind > 0 {
-		parts = append(parts, g.theme.BadStyle().Render(mark(behindMark, behind)+" behind"))
+		parts = append(parts, g.Theme().BadStyle().Render(mark(behindMark, behind)+" behind"))
 	}
 	if failed > 0 {
-		parts = append(parts, g.theme.BadStyle().Render(mark(failMark, failed)))
+		parts = append(parts, g.Theme().BadStyle().Render(mark(failMark, failed)))
 	}
 
-	left := " " + strings.Join(parts, g.theme.FaintStyle().Render(" · "))
-	right := g.theme.FaintStyle().Render(string(g.order))
+	left := " " + strings.Join(parts, g.Theme().FaintStyle().Render(" · "))
+	right := g.Theme().FaintStyle().Render(string(g.order))
 	if g.only {
-		right = g.theme.WarnStyle().Render("interesting") + g.theme.FaintStyle().Render(" · "+string(g.order))
+		right = g.Theme().WarnStyle().Render("interesting") + g.Theme().FaintStyle().Render(" · "+string(g.order))
 	}
 
 	// The sort is a detail; on a pane too narrow for both it is the half
@@ -495,7 +495,7 @@ func (g *Git) row(r repos.Repo, selected bool, w int) string {
 	if r.Err != nil {
 		if room := w - markerWidth - l.name - gap; room > 0 {
 			b.WriteString(strings.Repeat(" ", gap))
-			b.WriteString(g.theme.BadStyle().Render(ansi.Truncate(r.Err.Error(), room, "…")))
+			b.WriteString(g.Theme().BadStyle().Render(ansi.Truncate(r.Err.Error(), room, "…")))
 		}
 		return b.String()
 	}
@@ -510,7 +510,7 @@ func (g *Git) row(r repos.Repo, selected bool, w int) string {
 	}
 	if l.age > 0 {
 		b.WriteString(strings.Repeat(" ", gap))
-		b.WriteString(g.theme.FaintStyle().Render(align(g.age(r), l.age)))
+		b.WriteString(g.Theme().FaintStyle().Render(align(g.age(r), l.age)))
 	}
 	return b.String()
 }
@@ -559,18 +559,18 @@ func layoutFor(w int) layout {
 func (g *Git) state(r repos.Repo) string {
 	parts := make([]string, 0, 3)
 	if d := r.Dirty(); d > 0 {
-		parts = append(parts, g.theme.WarnStyle().Render(mark(dirtyMark, d)))
+		parts = append(parts, g.Theme().WarnStyle().Render(mark(dirtyMark, d)))
 	}
 	if r.Ahead > 0 {
-		parts = append(parts, g.theme.AccentStyle().Render(mark(aheadMark, r.Ahead)))
+		parts = append(parts, g.Theme().AccentStyle().Render(mark(aheadMark, r.Ahead)))
 	}
 	if r.Behind > 0 {
 		// Behind is the one that costs you something later, so it is
 		// the one drawn in the colour that means "look at this".
-		parts = append(parts, g.theme.BadStyle().Render(mark(behindMark, r.Behind)))
+		parts = append(parts, g.Theme().BadStyle().Render(mark(behindMark, r.Behind)))
 	}
 	if len(parts) == 0 {
-		return g.theme.GoodStyle().Render(cleanMark)
+		return g.Theme().GoodStyle().Render(cleanMark)
 	}
 	return strings.Join(parts, " ")
 }
@@ -588,13 +588,13 @@ func (g *Git) age(r repos.Repo) string {
 func (g *Git) nameStyle(r repos.Repo, selected bool) lipgloss.Style {
 	switch {
 	case selected && g.Focused():
-		return g.theme.AccentStyle().Bold(true)
+		return g.Theme().AccentStyle().Bold(true)
 	case r.Err != nil:
-		return g.theme.BadStyle()
+		return g.Theme().BadStyle()
 	case r.Clean() && r.Synced():
-		return g.theme.DimStyle()
+		return g.Theme().DimStyle()
 	default:
-		return g.theme.TextStyle()
+		return g.Theme().TextStyle()
 	}
 }
 
@@ -602,15 +602,15 @@ func (g *Git) nameStyle(r repos.Repo, selected bool) lipgloss.Style {
 // a branch name like any other.
 func (g *Git) refStyle(r repos.Repo) lipgloss.Style {
 	if r.Branch == "" {
-		return g.theme.WarnStyle()
+		return g.Theme().WarnStyle()
 	}
-	return g.theme.DimStyle()
+	return g.Theme().DimStyle()
 }
 
 // strip renders the whole list on one line, for the status bar: the
 // repositories that have something to say, in as many as will fit.
 func (g *Git) strip(list []repos.Repo) string {
-	sep := g.theme.FaintStyle().Render(" │ ")
+	sep := g.Theme().FaintStyle().Render(" │ ")
 	out := " "
 	shown := 0
 
@@ -618,9 +618,9 @@ func (g *Git) strip(list []repos.Repo) string {
 		if r.Err == nil && r.Clean() && r.Synced() {
 			continue // a clean repo is not news
 		}
-		chip := g.theme.TextStyle().Render(r.Name) + " " + g.state(r)
+		chip := g.Theme().TextStyle().Render(r.Name) + " " + g.state(r)
 		if r.Err != nil {
-			chip = g.theme.BadStyle().Render(r.Name + " " + failMark)
+			chip = g.Theme().BadStyle().Render(r.Name + " " + failMark)
 		}
 		next := out + chip
 		if shown > 0 {
@@ -633,7 +633,7 @@ func (g *Git) strip(list []repos.Repo) string {
 	}
 
 	if shown == 0 {
-		return g.theme.DimStyle().Render(fmt.Sprintf(" %s %d repos clean", cleanMark, len(list)))
+		return g.Theme().DimStyle().Render(fmt.Sprintf(" %s %d repos clean", cleanMark, len(list)))
 	}
 	return out
 }

@@ -50,6 +50,9 @@ type Config struct {
 	DefaultDashboard string `yaml:"default_dashboard"`
 
 	Theme struct {
+		// Name is a palette in internal/theme. Empty means theme.Default.
+		Name string `yaml:"name"`
+		// Accent overrides the named theme's accent colour only.
 		Accent string `yaml:"accent"`
 	} `yaml:"theme"`
 

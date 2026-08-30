@@ -99,7 +99,8 @@ func TestBarIsRenderedAboveTheRows(t *testing.T) {
 		t.Errorf("first line should be the bar, got %q", lines[0])
 	}
 	// Frameless: no border characters around it.
-	if strings.ContainsAny(lines[0], "╭╮│") {
+	c := theme.New("").Chrome
+	if strings.ContainsAny(lines[0], c.TopLeft+c.TopRight+c.Vertical) {
 		t.Errorf("the bar should have no frame, got %q", lines[0])
 	}
 }

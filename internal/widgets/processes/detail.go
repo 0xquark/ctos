@@ -48,7 +48,7 @@ func (p *Processes) infoLines(proc procs.Process, h int) []string {
 		p.identityLine(proc),
 		p.factsLine(proc),
 		"",
-		p.theme.DimStyle().Render(truncate(" "+strings.TrimSpace(proc.Command), p.W)),
+		p.Theme().DimStyle().Render(truncate(" "+strings.TrimSpace(proc.Command), p.W)),
 		"",
 	}
 
@@ -67,28 +67,28 @@ func (p *Processes) infoLines(proc procs.Process, h int) []string {
 
 // identityLine is the pane's title: what this process is.
 func (p *Processes) identityLine(proc procs.Process) string {
-	line := p.theme.AccentStyle().Bold(true).Render(" "+proc.Name()) +
-		p.theme.FaintStyle().Render(" · ") +
-		p.theme.TextStyle().Render(fmt.Sprintf("pid %d", proc.PID)) +
-		p.theme.FaintStyle().Render(" · ") +
-		p.theme.DimStyle().Render(proc.User)
+	line := p.Theme().AccentStyle().Bold(true).Render(" "+proc.Name()) +
+		p.Theme().FaintStyle().Render(" · ") +
+		p.Theme().TextStyle().Render(fmt.Sprintf("pid %d", proc.PID)) +
+		p.Theme().FaintStyle().Render(" · ") +
+		p.Theme().DimStyle().Render(proc.User)
 	return truncate(line, p.W)
 }
 
 // factsLine is the numbers that did not fit in the table row.
 func (p *Processes) factsLine(proc procs.Process) string {
 	facts := []string{
-		p.theme.DimStyle().Render("state ") + p.theme.TextStyle().Render(describeState(proc.State)),
-		p.theme.DimStyle().Render(humanize.Bytes(proc.RSS)) + p.theme.FaintStyle().Render(fmt.Sprintf(" (%.1f%%)", proc.Mem)),
-		p.theme.DimStyle().Render(fmt.Sprintf("cpu %.1f%%", proc.CPU)),
+		p.Theme().DimStyle().Render("state ") + p.Theme().TextStyle().Render(describeState(proc.State)),
+		p.Theme().DimStyle().Render(humanize.Bytes(proc.RSS)) + p.Theme().FaintStyle().Render(fmt.Sprintf(" (%.1f%%)", proc.Mem)),
+		p.Theme().DimStyle().Render(fmt.Sprintf("cpu %.1f%%", proc.CPU)),
 	}
 	if proc.Elapsed > 0 {
 		started := time.Now().Add(-proc.Elapsed)
-		facts = append(facts, p.theme.FaintStyle().Render("up "+shortDuration(proc.Elapsed)))
-		facts = append(facts, p.theme.FaintStyle().Render(started.Format("02 Jan 15:04")))
+		facts = append(facts, p.Theme().FaintStyle().Render("up "+shortDuration(proc.Elapsed)))
+		facts = append(facts, p.Theme().FaintStyle().Render(started.Format("02 Jan 15:04")))
 	}
 
-	sep := p.theme.FaintStyle().Render(" · ")
+	sep := p.Theme().FaintStyle().Render(" · ")
 	for n := len(facts); n > 0; n-- {
 		line := " " + strings.Join(facts[:n], sep)
 		if lipgloss.Width(line) <= p.W {
@@ -200,7 +200,7 @@ func fitChildren(have, subtree, room int) (show, hidden int) {
 
 // elisionLine marks where the tree was cut.
 func (p *Processes) elisionLine(depth int, text string) string {
-	return p.theme.FaintStyle().Render(truncate(" "+strings.Repeat("   ", depth)+text, p.W))
+	return p.Theme().FaintStyle().Render(truncate(" "+strings.Repeat("   ", depth)+text, p.W))
 }
 
 // treeLine renders one node. The selected process is highlighted so the eye
@@ -222,13 +222,13 @@ func (p *Processes) treeLine(proc procs.Process, depth int, branch, moreSiblings
 		return ""
 	}
 
-	style := p.theme.DimStyle()
+	style := p.Theme().DimStyle()
 	if self {
-		style = p.theme.AccentStyle().Bold(true)
+		style = p.Theme().AccentStyle().Bold(true)
 	}
 	label := fmt.Sprintf("%s (%d)", proc.Name(), proc.PID)
 
-	return p.theme.FaintStyle().Render(prefix) + style.Render(humanize.Truncate(label, width))
+	return p.Theme().FaintStyle().Render(prefix) + style.Render(humanize.Truncate(label, width))
 }
 
 // describeState expands the ps state code, which is otherwise a single letter
@@ -255,28 +255,28 @@ func describeState(code string) string {
 // logLines renders the log pane: a header saying what is being shown, then the
 // newest entries that fit.
 func (p *Processes) logLines(proc procs.Process, h int) []string {
-	head := p.theme.DimStyle().Render(" logs ") +
-		p.theme.FaintStyle().Render(fmt.Sprintf("· pid %d · last %s", proc.PID, procs.CompactDuration(p.logWindow)))
+	head := p.Theme().DimStyle().Render(" logs ") +
+		p.Theme().FaintStyle().Render(fmt.Sprintf("· pid %d · last %s", proc.PID, procs.CompactDuration(p.logWindow)))
 
 	// Order matters: lines we actually hold win over any explanation of why
 	// we might not have them. LogsSupported describes this machine, and the
 	// lines will not always have come from it.
 	switch {
 	case p.logsLoading:
-		return []string{head, "", p.theme.DimStyle().Render(" reading the system log…")}
+		return []string{head, "", p.Theme().DimStyle().Render(" reading the system log…")}
 	case p.logsErr != nil:
-		return append([]string{head, ""}, p.wrapNotice(p.theme.BadStyle(), "⚠ "+p.logsErr.Error())...)
+		return append([]string{head, ""}, p.wrapNotice(p.Theme().BadStyle(), "⚠ "+p.logsErr.Error())...)
 	case len(p.logs) > 0:
 		// fall through to the renderer below
 	case !procs.LogsSupported():
-		return append([]string{head, ""}, p.wrapNotice(p.theme.DimStyle(),
+		return append([]string{head, ""}, p.wrapNotice(p.Theme().DimStyle(),
 			"no system log source on this machine. macOS uses `log show`; Linux needs journalctl.")...)
 	default:
-		return append([]string{head, ""}, p.wrapNotice(p.theme.DimStyle(),
+		return append([]string{head, ""}, p.wrapNotice(p.Theme().DimStyle(),
 			"nothing logged in the last "+procs.CompactDuration(p.logWindow)+". A process that writes to stdout under a service manager often records nothing here.")...)
 	}
 
-	head += p.theme.FaintStyle().Render(fmt.Sprintf(" · %d lines", len(p.logs)))
+	head += p.Theme().FaintStyle().Render(fmt.Sprintf(" · %d lines", len(p.logs)))
 
 	// A log is read newest-last, and the pane is shorter than the buffer, so
 	// show the tail rather than the head.
@@ -288,7 +288,7 @@ func (p *Processes) logLines(proc procs.Process, h int) []string {
 	lines := make([]string, 0, len(tail)+1)
 	lines = append(lines, head)
 	for _, l := range tail {
-		lines = append(lines, p.theme.TextStyle().Render(truncate(" "+trimLogLine(l), p.W)))
+		lines = append(lines, p.Theme().TextStyle().Render(truncate(" "+trimLogLine(l), p.W)))
 	}
 	return lines
 }

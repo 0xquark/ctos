@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/0xquark/ctos/internal/theme"
 	"github.com/0xquark/ctos/internal/todo"
 	"github.com/0xquark/ctos/internal/widget"
 	tea "github.com/charmbracelet/bubbletea"
@@ -84,7 +83,6 @@ const (
 // Tasks is a checklist widget over one markdown file.
 type Tasks struct {
 	widget.Base
-	theme  theme.Theme
 	editor string
 
 	path    string
@@ -142,7 +140,6 @@ func New(ctx widget.Context) (widget.Widget, error) {
 	}
 
 	return &Tasks{
-		theme:   ctx.Theme,
 		editor:  ctx.Editor,
 		path:    cfg.Path,
 		show:    show,

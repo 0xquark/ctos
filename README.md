@@ -43,6 +43,7 @@ Edit them and restart.
 | `enter` | the focused widget's primary action |
 | `r` | refresh the focused widget |
 | `ctrl+l` | rearrange the layout (`b` moves the status bar) |
+| `ctrl+t` | next theme |
 | `?` | toggle full help |
 | `q` | quit |
 
@@ -186,7 +187,8 @@ Two files, both optional — ctOS runs on defaults without them.
 editor: ${EDITOR:-vi}       # opens files; falls back to $EDITOR, then vi
 default_dashboard: home
 theme:
-  accent: "#ff6b35"
+  name: ember               # see "Themes" below; ctrl+t cycles them
+  accent: "#4fb8cc"         # optional: overrides just that theme's accent colour
 refresh:
   default: 30s              # for widgets that set no interval
 ```
@@ -221,6 +223,62 @@ width evenly. Omit `rows:` and each widget gets its own full-width row.
 
 Any string value may reference the environment as `${VAR}` or `${VAR:-default}`, so dashboards
 stay shareable and secrets stay out of the file.
+
+### Themes
+
+Press `ctrl+t` in ctOS to cycle through them. The dashboard repaints immediately and the choice
+is written back to `config.yaml`, so it survives a restart. `ctos themes` prints the list with a
+swatch of each:
+
+| Theme | Look |
+|---|---|
+| `ember` | orange on neutral grey — the default |
+| `ctos` | muted cyan on cool slate, bracketed frames |
+| `dedsec` | acid lime and magenta, high contrast |
+| `blume` | clinical corporate blue |
+| `noir` | near-monochrome; colour only where something is wrong |
+
+Plus ports of eight published schemes, with thanks to their authors:
+
+| Theme | Upstream |
+|---|---|
+| `catppuccin` | [Catppuccin](https://catppuccin.com) — Mocha, with Latte as the light variant |
+| `dracula` | [Dracula](https://draculatheme.com) — with Alucard as the light variant |
+| `gruvbox` | [gruvbox](https://github.com/morhetz/gruvbox) — dark and light, medium contrast |
+| `nord` | [Nord](https://nordtheme.com) |
+| `onedark` | [One Dark](https://github.com/atom/atom) — with One Light |
+| `rosepine` | [Rosé Pine](https://rosepinetheme.com) — Main, with Dawn as the light variant |
+| `solarized` | [Solarized](https://ethanschoonover.com/solarized) — dark and light |
+| `tokyonight` | [Tokyo Night](https://github.com/enkia/tokyo-night-vscode-theme) — with Tokyo Night Day |
+
+Each port uses the upstream project's *own* light variant for light terminals, rather than a
+dark scheme with a guessed light mode. Nord is the exception — it publishes no light variant, so
+its Polar Night greys are used as ink on Snow Storm.
+
+```yaml
+theme:
+  name: ctos
+```
+
+A theme sets every colour ctOS draws with — the accent, the three text weights, the
+good/warn/bad the vitals and task counts use, and the runes its frames are drawn with. Each one
+is defined for a light terminal as well as a dark one, so `ctos` on a white background is deep
+teal ink rather than cyan on black.
+
+`accent:` overrides just the accent — focus borders, selections, highlights — and leaves the
+rest of the theme alone, so a palette you like in a colour you like is one line:
+
+```yaml
+theme:
+  name: noir
+  accent: "#9ae64a"
+```
+
+It applies to the theme you wrote it under. Pressing `ctrl+t` removes it, because the theme you
+switched to brings its own accent — an override carried across would tint every palette in the
+last one's colour.
+
+An unknown name stops startup and lists the alternatives, rather than quietly falling back.
 
 ### Config location
 

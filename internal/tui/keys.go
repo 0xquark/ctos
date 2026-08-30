@@ -19,6 +19,7 @@ var globalHelp = []helpEntry{
 	{"↑ ↓", "move within widget"},
 	{"r", "refresh widget"},
 	{"ctrl+l", "rearrange layout"},
+	{"ctrl+t", "next theme"},
 	{"?", "toggle help"},
 	{"q", "quit"},
 }
