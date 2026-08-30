@@ -8,27 +8,7 @@ tool, an action hands the whole terminal to it and gives it back when you quit.
 
 > Status: **v0.1** early. The scaffold works; remote monitoring over SSH is next.
 
-```
-╭─ clock ────────────────────────────────────────╮╭─ notes ────────────────────────────────────────╮
-│                                                ││ ▸ today.md                                  2m │
-│                                                ││   standup.md                                1h │
-│                                                ││   ctos-ideas.md                             2h │
-│                                                ││ ────────────────────────────────────────────── │
-│          ╷ ╭─╴     ╭─╮ ╭─╮     ╷ ╷ ╭─╴         ││ # Wednesday                                    │
-│          │ ├─╮  ▪   ─┤ │ │  ▪  ╰─┤ ╰─╮         ││                                                │
-│          ╵ ╰─╯     ╰─╯ ╰─╯       ╵ ╰─╯         ││ • shipped the notes preview                    │
-│                                                ││ • fixed the marker width bug                   │
-│                Wed 26 Aug 2026                 ││                                                │
-│                                                ││ > layout mode next                             │
-╰────────────────────────────────────────────────╯╰────────────────────────────────────────────────╯
-╭─ hacker news ────────────────────────────────────────────────────────────────────────────────────╮
-│  1 ▸ Show HN: ctOS, a terminal control plane                                                     │
-│      412 pts · 137 comments · github.com · 3h                                                    │
-│  2   Ask HN: What is your terminal setup?                                                        │
-│      88 pts · 210 comments · 5h                                                                  │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
- tab focus  ·  ↑↓ move  ·  enter edit  ·  ? help  ·  q quit
-```
+![ctOS dashboard](screenshot.png)
 
 ## Install
 
@@ -473,7 +453,7 @@ A due date is a `due:` token in the line, written back as an ISO date so it sort
 Typing a task takes shorthands and resolves them on the way in — `due:today`, `due:tomorrow`,
 `due:fri`, `due:+3d`, `due:09-04`, `due:2026-09-04`. A weekday means the *next* one, never
 today. A shorthand that means nothing is left in the text rather than swallowed, so you get your
-words back instead of a task that quietly lost half of itself. Obsidian's `📅 2026-09-04` is
+words back instead of a task that quietly lost half of itself. Obsidian's `2026-09-04` is
 read too, and normalised on the next write.
 
 `show: today` is the list that answers "what am I doing today": overdue and due-today, and
