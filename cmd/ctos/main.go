@@ -19,6 +19,7 @@ import (
 	_ "github.com/0xquark/ctos/internal/widgets/hackernews"
 	_ "github.com/0xquark/ctos/internal/widgets/notes"
 	_ "github.com/0xquark/ctos/internal/widgets/processes"
+	_ "github.com/0xquark/ctos/internal/widgets/system"
 )
 
 // version is overridden at release time with -ldflags.
